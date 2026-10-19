@@ -173,7 +173,10 @@ dsh --profile web --no-open --port 3100
 ## 5. 常见问题
 
 - **npm publish 报 ENEEDAUTH**：没登录官方源 → `npm login --registry=https://registry.npmjs.org`。
-- **npm publish 报 402/403**：包名被占用或权限不足。`dsh-live-terminal` 当前未占用；若之后被占，改用 `@scope/dsh-live-terminal`（需先在 npm 创建 scope/org），并同步改 `package.json.name`、`cordis.patch.yml` 的 row `name`、`tools/build-client.mjs` 的 `PLUGIN_ID`、README 与 catalog 文件名，然后重新构建。
+- **npm publish 报 E403 "Two-factor authentication or granular access token with bypass 2fa enabled is required"**：账号强制 2FA，web 登录 token 不能直接发布。任选其一：
+  1. 带 OTP 发布：`npm publish --registry=https://registry.npmjs.org --access public --otp=<6位验证码>`（验证器 App 里取）；
+  2. **Granular Access Token（推荐，后续免 OTP）**：<https://www.npmjs.com/settings/~/tokens> → Generate New Token → Granular Access Token → 权限 Read and write、Packages 选 All packages（首次发布新包需要）、勾选 **Bypass 2FA**；然后 `npm config set //registry.npmjs.org/:_authToken=<token>`，再发布。
+- **npm publish 报 402/403（非 2FA）**：包名被占用或权限不足。`dsh-live-terminal` 当前未占用；若之后被占，改用 `@scope/dsh-live-terminal`（需先在 npm 创建 scope/org），并同步改 `package.json.name`、`cordis.patch.yml` 的 row `name`、`tools/build-client.mjs` 的 `PLUGIN_ID`、README 与 catalog 文件名，然后重新构建。
 - **market 里搜不到**：没有 catalog PR 就一定搜不到（npm 发布不等于上架）；或 PR 未合并/站点还在构建；China 区域最多滞后 ~24h。
 - **市场安装被拒 / 兼容性红标**：catalog 读顶层 `engines.dsh`（本包为 `>=0.2.1-rc.2 <0.3.0-0`，对 0.2.1-rc.2 显示兼容）；市场安装 preflight 遇到不兼容包会直接 400。
 - **装完没生效**：Desktop 需要完全退出并重开。
