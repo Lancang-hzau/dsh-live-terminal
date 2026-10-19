@@ -230,7 +230,7 @@
 ### 7.2 复现命令
 
 ```powershell
-cd "C:\Users\LANCANG\Desktop\Code\DSH plugin"
+cd "C:\Users\LANCANG\Desktop\Code\DSH Plugs\dsh-live-terminal"
 node tools/build-client.mjs
 & "D:\DSH\resources\runtime\cli\bin\dsh.cmd" --profile dev --no-open --port 3105 *> qa/artifacts/devhost-3105-final2.log
 # 从日志取 URL：dsh web: http://127.0.0.1:3105/?token=...

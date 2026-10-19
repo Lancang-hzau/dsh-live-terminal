@@ -8,7 +8,7 @@ Catalog inspected: `https://awesome-dsh-plugin.com/plugins.json` (5,945 entries,
 
 > Workspace note: while this research ran, the plugin was restructured from
 > `packages/dsh-terminal-panel` (or `packages/dsh-live-terminal`) to the **repository root**. Current root is
-> `C:\Users\LANCANG\Desktop\Code\DSH plugin` with `package.json` name **`dsh-live-terminal`** version
+> `C:\Users\LANCANG\Desktop\Code\DSH Plugs\dsh-live-terminal` with `package.json` name **`dsh-live-terminal`** version
 > **1.0.0**, `cordis.patch.yml`, `README.md`, `screenshots.json`, `icon.svg`, `lib/index.js`,
 > `lib/client.js`. The old `packages/...` paths are staged git renames. All commands below use the root.
 
@@ -380,7 +380,7 @@ cooldown. Do not close/reopen, push empty commits, or resubmit.
 
 ```powershell
 # 0) Local repo: commit the current restructure and push (after creating the GitHub repo)
-cd "C:\Users\LANCANG\Desktop\Code\DSH plugin"
+cd "C:\Users\LANCANG\Desktop\Code\DSH Plugs\dsh-live-terminal"
 git add -A
 git commit -m "chore: restructure plugin to repository root for npm/catalog release"
 git remote add origin https://github.com/Lancang-hzau/dsh-live-terminal.git
@@ -688,7 +688,7 @@ packages you truly import; otherwise `engines.dsh` is enough.
 ### 6.2 Commands
 
 ```powershell
-cd "C:\Users\LANCANG\Desktop\Code\DSH plugin"
+cd "C:\Users\LANCANG\Desktop\Code\DSH Plugs\dsh-live-terminal"
 
 # 0) Sanity: default registry is a mirror; the name must be free on npmjs
 npm config get registry

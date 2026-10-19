@@ -57,7 +57,7 @@ npm config set //registry.npmjs.org/:_authToken=<你的token>
 2. 推送本仓库：
 
 ```powershell
-cd "C:\Users\LANCANG\Desktop\Code\DSH plugin"
+cd "C:\Users\LANCANG\Desktop\Code\DSH Plugs\dsh-live-terminal"
 git remote add origin https://github.com/<owner>/dsh-live-terminal.git
 git branch -M main
 git push -u origin main
@@ -79,7 +79,7 @@ node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json
 ## 2. 发布到 npm
 
 ```powershell
-cd "C:\Users\LANCANG\Desktop\Code\DSH plugin"
+cd "C:\Users\LANCANG\Desktop\Code\DSH Plugs\dsh-live-terminal"
 
 npm install
 npm run build        # 构建 client-src -> lib/client.js

@@ -7,7 +7,7 @@
 1. 在 DSH Web GUI 中拉起可见的终端窗口（真实 PTY，可交互）。
 2. DSH agent 执行的终端命令显示在这个终端窗口里，实时输出（看到进度，而不是等后台结果）。
 3. DSH agent 能“截图”终端窗口当前内容（文本屏幕内容），并有一个工具把结果交给模型。
-4. 代码只放在 `C:\Users\LANCANG\Desktop\Code\DSH plugin`；不修改 `D:\DSH`。开发测试使用独立的 dev profile / dev host，不重启用户的 Desktop DSH。
+4. 代码只放在 `C:\Users\LANCANG\Desktop\Code\DSH Plugs\dsh-live-terminal`；不修改 `D:\DSH`。开发测试使用独立的 dev profile / dev host，不重启用户的 Desktop DSH。
 
 ### 1.1 用户已确认的决定（2026-10-19）
 
@@ -19,7 +19,7 @@
 ## 2. 运行环境与路径
 
 - DSH 版本：0.2.1-rc.2；Desktop GUI 当前 URL `http://127.0.0.1:58966`（不要动它）。
-- 插件仓库：`C:\Users\LANCANG\Desktop\Code\DSH plugin`（node/npm/pnpm 可用，网络可用）。
+- 插件仓库：`C:\Users\LANCANG\Desktop\Code\DSH Plugs\dsh-live-terminal`（node/npm/pnpm 可用，网络可用）。
 - 插件包：`packages\dsh-terminal-panel`（`name: dsh-terminal-panel`，link 安装进 dev profile）。
 - dev profile：`C:\Users\LANCANG\.dsh\profiles\dev`（已安装本插件，package.json 的 `dsh.profile.bundles` 含 `dsh-terminal-panel`）。
 - dev host 启动命令（在仓库根目录执行；端口 3101）：

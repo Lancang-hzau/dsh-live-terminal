@@ -35,7 +35,7 @@
 
 ```powershell
 # 后台启动（日志必须落盘，便于断言“无插件报错”）
-& "D:\DSH\resources\runtime\cli\bin\dsh.cmd" --profile dev --no-open --port 3105 *> "C:\Users\LANCANG\Desktop\Code\DSH plugin\qa\artifacts\devhost-3105.log"
+& "D:\DSH\resources\runtime\cli\bin\dsh.cmd" --profile dev --no-open --port 3105 *> "C:\Users\LANCANG\Desktop\Code\DSH Plugs\dsh-live-terminal\qa\artifacts\devhost-3105.log"
 # 从日志提取 URL：
 #   dsh web: http://127.0.0.1:3105/?token=...
 ```

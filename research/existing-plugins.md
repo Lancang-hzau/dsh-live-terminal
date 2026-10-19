@@ -9,7 +9,7 @@ Scope: existing community plugins vs. the official built-in terminal, judged aga
 - **C** — the agent can capture / screenshot the current terminal content (text and/or image) with a tool.
 
 Read-only constraint respected: nothing under `D:\DSH` or `C:\Users\LANCANG\.dsh` was modified.
-All downloaded packages / extracted sources are under `C:\Users\LANCANG\Desktop\Code\DSH plugin\research\sources\`.
+All downloaded packages / extracted sources are under `C:\Users\LANCANG\Desktop\Code\DSH Plugs\dsh-live-terminal\research\sources\`.
 
 ---
 
@@ -310,7 +310,7 @@ Effort ~1–2 weeks for a robust A/B/C-text plugin; image adds ~3–5 days. This
 
 ## 7. Reference implementations (paths + key files)
 
-All paths are under `C:\Users\LANCANG\Desktop\Code\DSH plugin\research\sources\`.
+All paths are under `C:\Users\LANCANG\Desktop\Code\DSH Plugs\dsh-live-terminal\research\sources\`.
 
 ### 7.1 Complete A+B+C(text) implementation
 

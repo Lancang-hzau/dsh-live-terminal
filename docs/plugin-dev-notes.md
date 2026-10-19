@@ -2,7 +2,7 @@
 
 Status: research / architecture note (not final code)
 Target: **DeepSeek Harness Desktop 0.2.1-rc.2**, Windows 10/11, Web GUI
-Workspace: `C:\Users\LANCANG\Desktop\Code\DSH plugin`
+Workspace: `C:\Users\LANCANG\Desktop\Code\DSH Plugs\dsh-live-terminal`
 Author: SDK/architecture research subagent
 Date: 2026-10-19 (Asia/Shanghai)
 
@@ -86,7 +86,7 @@ bundle them.
 The environment’s file policy is `danger-full-access` for this research
 session, but the deliverable constraints are: **read-only on `D:\DSH` and
 `C:\Users\LANCANG\.dsh`; write only under
-`C:\Users\LANCANG\Desktop\Code\DSH plugin\docs\`** (plus research temp
+`C:\Users\LANCANG\Desktop\Code\DSH Plugs\dsh-live-terminal\docs\`** (plus research temp
 artifacts). Nothing in this document requires editing DSH itself.
 
 ---
@@ -2266,7 +2266,7 @@ Therefore:
   the plugin package’s resolution ancestry**:
 
 ```
-C:\Users\LANCANG\Desktop\Code\DSH plugin\
+C:\Users\LANCANG\Desktop\Code\DSH Plugs\dsh-live-terminal\
   packages\dsh-terminal-panel\        # the linked package (no host packages)
   tools\typecheck\
     package.json                      # devDeps: @deepseek-ai/* type packages
@@ -2329,7 +2329,7 @@ so the runtime never finds those copies.
 Install and typecheck:
 
 ```powershell
-cd "C:\Users\LANCANG\Desktop\Code\DSH plugin\tools\typecheck"
+cd "C:\Users\LANCANG\Desktop\Code\DSH Plugs\dsh-live-terminal\tools\typecheck"
 npm install
 cd "..\..\packages\dsh-terminal-panel"
 npm install --legacy-peer-deps
@@ -2399,7 +2399,7 @@ profile. That is why the template creation step comes first.
 From the workspace that contains the plugin package:
 
 ```powershell
-& $dsh plugin --profile webdev add "link:C:\Users\LANCANG\Desktop\Code\DSH plugin\packages\dsh-terminal-panel"
+& $dsh plugin --profile webdev add "link:C:\Users\LANCANG\Desktop\Code\DSH Plugs\dsh-live-terminal\packages\dsh-terminal-panel"
 ```
 
 What this does:
@@ -2465,7 +2465,7 @@ hand-editing).
 ### 10.5 Rebuild / reload loop
 
 ```powershell
-cd "C:\Users\LANCANG\Desktop\Code\DSH plugin\packages\dsh-terminal-panel"
+cd "C:\Users\LANCANG\Desktop\Code\DSH Plugs\dsh-live-terminal\packages\dsh-terminal-panel"
 npm install --legacy-peer-deps   # once: build tools + xterm; do NOT install host peers
 npm run build                    # host tsc + client esbuild
 ```
@@ -2498,7 +2498,7 @@ Once the isolated Web profile works:
 
 ```powershell
 # Fully quit the Desktop app first if you want the least surprising result.
-& $dsh plugin --profile desktop add "link:C:\Users\LANCANG\Desktop\Code\DSH plugin\packages\dsh-terminal-panel"
+& $dsh plugin --profile desktop add "link:C:\Users\LANCANG\Desktop\Code\DSH Plugs\dsh-live-terminal\packages\dsh-terminal-panel"
 ```
 
 Then start DSH Desktop. The Desktop profile is reserved and managed by the
