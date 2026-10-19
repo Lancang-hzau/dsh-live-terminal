@@ -125,16 +125,16 @@ const handle = await subprocess.spawnTerminal({
 - 每个 chunk 顺序：写入 headless xterm（`screen.write(data, cb)`）→ 追加 ring → 生成 `seq+1` 广播 `output` 帧。
 - 状态：`running` → `exited`（exitCode）或 `failed`（error message）。进程结束后 flush 输出、广播 `state`，SSE 最终帧。
 - `snapshot()`：`{ screen: serializer.serialize(), text: visibleText(), cursor: {x,y}, info }`。
-  - `visibleText()`：`buffer.active` 的 0..rows-1 行 `translateToString(true)`，逐行右裁剪，去掉尾部全空行，行间 `\n`。
+  - `visibleText()`：`buffer.active` 从 `baseY`（viewport 顶部）起 `rows` 行 `translateToString(true)`，逐行右裁剪，去掉尾部全空行，行间 `\n`（滚动后仍是“可见屏”语义；alt buffer 时等价 0..rows-1）。
 - 标题：`kind: 'command'|'interactive'`；命令会话标题 = 截断后的命令首行（≤80 字符）；交互会话默认 `PowerShell` / `终端`。
 - 会话保留：命令会话退出后保留（最多 `retainExited` 个，超出关闭并移除）；交互会话不自动移除。
 
 ### 4.3 会话注册表（`registry.js`）
 
-- `createCommandSession({ command, cwd, cols, rows, timeoutMs, sessionId, agentId })`：spawn `shell -NoLogo -Command <command>`（命令字符串原样传入 argv，不经 shell 解释；PowerShell 的 `-Command` 接受整串）。
-- `createInteractive({ cwd, cols, rows, sessionId, agentId, title })`：spawn 交互 shell。
-- `ensureAgentTerminal(agent)`：每个 agent 一个默认交互终端（用于 `terminal_run/send/read`），按 `agentId` 复用。
-- `runInExisting(session, command, { timeoutMs, signal })`：交互 shell 的标记包装执行：
+- `createCommandSession({ command, cwd, cols, rows, timeoutMs, sessionId, agentId })`：spawn `shell -NoLogo -NoProfile -NonInteractive -Command <command>`（命令字符串原样传入 argv，不经 shell 解释）。已与实现确认：命令会话不加载用户 profile（对齐内置执行器、避免 6s 启动与输出污染）。`live_terminal_run` 每次调用都创建一个这样的独立可见命令会话（不再复用交互 shell，也不再使用 wrapper 标记）。
+- `createInteractive({ cwd, cols, rows, sessionId, agentId, title })`：spawn 交互 shell（`-NoLogo`，加载用户 profile）；`live_terminal_open` / `live_terminal_send` 的缺省目标用它。
+- `ensureAgentTerminal(agent)`：每个 agent 一个默认交互终端（用于 `live_terminal_send/read`，也可被 `live_terminal_screenshot` 的兜底选择使用）。
+- `runInExisting(session, command, ...)`（wrapper 标记法）：保留为内部工具/单测能力；`live_terminal_run` 不再使用它（避免 wrapper 回显/标记污染可见屏幕与截图）。
   - 产生随机 nonce；wrapper 采用 `dsh-tool-pwsh-persistent` 的写法：
     `Write-Output '<START>'; $LASTEXITCODE=$null; $__s=1; try { Invoke-Expression "<escaped>"; $__ok=$? } catch { $__ok=$false }; if ($null -ne $LASTEXITCODE) { $__s=[int]$LASTEXITCODE } else { $__s = if ($__ok) {0} else {1} }; Write-Output ('<END>'+$__s)`
   - `quoteForPwsh`：反引号转义（\`、"、$），\r 删除，\n → \`n，ESC → \`e；单行写入并回车。
@@ -192,24 +192,24 @@ type SessionInfo = {
 `exec.agent` 是拥有者 Agent；`exec.signal` 是取消信号；`exec.agent.session?.id` 可作 sessionId。
 返回工具的模型可见文本由 `output.render` 生成；`value` 必须严格符合 `output.schema`（运行时校验，失败会变成工具错误）。
 
-工具清单：
+工具清单（**统一加 `live_` 前缀**，避免与官方实验性“持久终端”bundle 的 `terminal_*` 工具重名导致注册失败）：
 
-1. `terminal_run`
+1. `live_terminal_run`
    - 参数：`command`（string，必填）、`description`（string，可写可不写，仅展示）、`wait`（boolean，默认 true）、`timeoutMs`（number，默认 `commandTimeoutMs`）
-   - 行为：agent 默认交互终端里执行命令；输出实时进面板；`wait:true` 等待完成返回输出；`wait:false` 立即返回（后台运行，后续用 `terminal_read`/`terminal_screenshot` 查看）
-   - value：`{ terminalId, output, exitCode: number|null, timedOut: boolean, aborted: boolean, stillRunning: boolean }`
-   - render：文本 = `output`，追加 `\n[exit code: N]`（非 0）或 `[still running]` 等标记；保留最近若干行有界输出
-2. `terminal_screenshot`
-   - 参数：`terminalId`（string，可选；缺省用 agent 默认终端）、`withScrollback`（boolean，默认 false）
+   - 行为：**每次调用创建一个独立的可见命令会话**（`createCommandSession`，`-NoProfile -NonInteractive -Command`，cwd=agent 当前工作目录），输出实时进面板；`wait:true` 等待退出（受 timeoutMs 约束）；`wait:false` 立即返回、命令继续跑（后续用 `live_terminal_read`/`live_terminal_screenshot` 查看）。
+   - value：`{ terminalId, title, output, exitCode: number|null, timedOut: boolean, aborted: boolean, stillRunning: boolean }`
+   - render：**首行必须输出 `[terminal <id>]`（模型靠它传 terminalId）**，其后为 `output`，非 0 时追加 `\n[exit code: N]`，等待/超时等状态标记；输出有界。
+2. `live_terminal_screenshot`
+   - 参数：`terminalId`（string，可选；缺省选择该 agent **最近一个可见会话**：优先最近的 command 会话，其次 interactive）、`withScrollback`（boolean，默认 false）
    - value：`{ terminalId, title, state, cols, rows, cursor: {x,y}, text: string, ansi?: string }`
    - render：`text` 前加一行 `[terminal <title> <cols>x<rows> cursor (x,y) state]`；这是模型看到的“截图”
-3. `terminal_send`：`{ terminalId?, text (必填), submit? (默认 true) }` → `{ ok, terminalId }`（写入原始文本；submit 时追加 `\r`）
-4. `terminal_read`：`{ terminalId?, maxBytes? }` → `{ terminalId, state, text }`（最近输出尾部；无 ANSI）
-5. `terminal_list`：`{}` → `{ terminals: SessionInfo[] }`
-6. `terminal_open`：`{ title?, cwd? }` → `{ terminalId, info }`（创建新的可见交互会话）
-7. `terminal_close`：`{ terminalId }` → `{ ok: true }`
+3. `live_terminal_send`：`{ terminalId?, text (必填), submit? (默认 true) }` → `{ ok, terminalId }`（写入原始文本；submit 时追加 `\r`；缺省目标是该 agent 的默认交互终端，不存在时懒创建；对已退出会话给出清晰错误）
+4. `live_terminal_read`：`{ terminalId?, maxBytes? }` → `{ terminalId, state, text }`（最近输出尾部；无 ANSI；缺省目标同 send）
+5. `live_terminal_list`：`{}` → `{ terminals: SessionInfo[] }`
+6. `live_terminal_open`：`{ title?, cwd? }` → `{ terminalId, info }`（创建新的可见交互会话，作为该 agent 的默认交互终端）
+7. `live_terminal_close`：`{ terminalId }` → `{ ok: true }`
 
-工具指南（`prompt.js`）：`ctx.systemPrompt.section({ name: 'tool:terminal-panel', order: <TOOL_PTY 附近>, text })`，说明：命令会自动显示在“终端面板”；需要看当前屏幕用 `terminal_screenshot`；需要交互/长任务用 `terminal_open/terminal_run/terminal_send`；`terminal_screenshot` 适合 TUI/全屏程序。
+工具指南（`prompt.js`）：`ctx.systemPrompt.section({ name: 'tool:terminal-panel', order: <TOOL_PTY 附近>, text })`，说明：命令会自动显示在“终端面板”；需要看当前屏幕用 `live_terminal_screenshot`；需要交互/长任务用 `live_terminal_open/run/send`；`live_terminal_screenshot` 适合 TUI/全屏程序。
 
 ### 4.6 默认 shell 工具拦截（`intercept.js`）
 
@@ -281,6 +281,7 @@ export function apply(ctx) {
 - 主题：跟随 DSH 主题变量（尽量读取 `getComputedStyle(document.documentElement)` 的 `--dsw-*` 背景/前景色；不要求完美）。
 - 截图按钮：把 xterm 可见屏文本复制到剪贴板（navigator.clipboard）并提示；也给 agent 的截图工具提供同样内容（host 端计算）。
 - 错误态：连接失败显示重试；空态显示“新建终端”按钮。
+- 自动打开：面板 mount 时订阅全局 `GET /events`；当出现新的 `kind:'command' & owner:'agent' & state:'running'` 会话且当前右侧栏未打开面板时，自动 `ctx.sidebarRight.openTab('terminal-panel', { revealIfOpened: true })`（每个浏览器标签页最多自动打开一次，避免打扰）。这样用户不用手动点就能看到 agent 命令进度。
 - 语言：中文为主，`locale` 注册 zh/en。
 
 ### 5.3 构建（`tools/build-client.mjs`）
@@ -314,14 +315,14 @@ export function apply(ctx) {
 ### 6.2 e2e（`tools/verify-ui.mjs` / QA 扩展）
 - 打开 dev GUI（token URL）→ 关闭预览弹窗 → 打开会话 → `Control+Shift+B` 打开右侧栏 → 点“终端面板”guide → 面板 body 出现。
 - 面板内新建终端 → xterm 出现 → 输入 `Write-Output 'hello'` 回车 → 屏幕出现 hello。
-- agent 工具验证（通过 HTTP 直接调用工具不可行；用真实会话让 agent 触发 `terminal_screenshot`，或在 dev host 里用测试 agent；至少验证：拦截 pwsh 调用后面板出现命令会话与输出）。
+- agent 工具验证（通过 HTTP 直接调用工具不可行；用真实会话让 agent 触发 `live_terminal_screenshot`，或在 dev host 里用测试 agent；至少验证：拦截 pwsh 调用后面板出现命令会话与输出）。
 - 截图工具返回的 `text` 包含屏幕内容（TUI 场景可后续测）。
 
 ### 6.3 验收门槛
 - dev host 启动无插件报错；`GET /dsh-terminal-panel/sessions` 带 cookie 返回 200；client bundle 加载无 console error。
 - 面板可开、可输入、可 resize、可关；SSE 实时输出。
 - 拦截生效：一次 `pwsh` 调用在面板出现实时输出，工具结果正常（agent 不报错）。
-- `terminal_screenshot` 返回当前屏幕文本。
+- `live_terminal_screenshot` 返回当前屏幕文本。
 - 安装到 desktop profile 后同样工作（由 Lead 在确认后执行；不要在测试中重启用户的 Desktop DSH）。
 
 ## 7. 并行分工与写作用域（避免冲突）

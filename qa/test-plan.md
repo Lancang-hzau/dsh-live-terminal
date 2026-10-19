@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| 文档版本 | v1.0（阶段 A） |
+| 文档版本 | v1.1（阶段 A；纳入 2026-10-19 Lead 契约更新：`live_` 工具前缀 / 自动打开 / 截图=文本屏幕） |
 | 作者 | qa-verifier（独立 QA） |
 | 日期 | 2026-10-19 Asia/Shanghai |
 | 契约来源 | `docs/architecture.md`（尤其 §4 接口、§5 客户端、§6 测试与验收） |
@@ -20,7 +20,8 @@
 
 - **A** 在 DSH Web GUI 中拉起可见、可交互的真实 PTY 终端面板；
 - **B** DSH agent 执行的终端命令在面板中实时可见；
-- **C** agent 能截取终端当前屏幕文本并把结果交给模型（`terminal_screenshot`）。
+- **C** agent 能截取终端当前屏幕**文本**（用户已确认：文本屏幕快照，不做 PNG/图片）并把结果交给模型（`live_terminal_screenshot`）；
+- **D**（契约 §5.2 自动打开）出现新的 agent 命令会话时，终端面板在右侧栏自动打开（每浏览器标签页最多一次）。
 
 范围为 architecture.md §6.2 全部 e2e 场景 + §6.3 验收门槛 + §4 接口契约 + §5 客户端行为，并覆盖任务书要求的边界：中文/ANSI/长输出/超时/关闭/重连/resize/多会话/未鉴权 401/拦截回退。
 
@@ -73,9 +74,9 @@
 | L2 host 单测 | `node --test packages/dsh-terminal-panel/tests/`（host-engine 的 tests；QA 独立运行并核对 6.1 覆盖） | ansi/ring/wrapper 解析/value 映射 | QA 运行，host-engine 维护 |
 | L3 HTTP/SSE 黑盒 | `context.request` + 浏览器内 `fetch`/`EventSource` | 路由、状态码、JSON 形状、SSE 事件名/时序/实时性、边界 | QA 自动 |
 | L4 UI e2e | Playwright 驱动真实 GUI（右侧栏 guide → 面板 → xterm 输入/输出/resize/关闭/重连） | A、面板可用性 | QA 自动 |
-| L5 工具/拦截 | 需由 agent 触发内置 `pwsh`/`terminal_*` 工具，浏览器无法直接调用 | B（拦截）、C（截图工具）、超时、wait:false | **人工/Lead 验证**（QA 给出步骤与判定，见 §4.5） |
+| L5 工具/拦截 | 需由 agent 触发内置 `pwsh` 与 `live_terminal_*` 工具，浏览器无法直接调用 | B（拦截）、C（截图工具）、超时、wait:false、自动打开 | **人工/Lead 验证**（QA 给出步骤与判定，见 §4.5） |
 
-> 工具型断言（`terminal_run`/`terminal_screenshot`/拦截）在报告中标注 `MANUAL` 或 `BLOCKED-BY-CREDITS`，并在 §4.5 给出可执行的人工验证方法与期望证据；host-engine 的单测（value 映射/schema 合法性）作为静态与单元层面的补充证据。
+> 工具型断言（`live_terminal_run`/`live_terminal_screenshot`/拦截/自动打开）在报告中标注 `MANUAL` 或 `BLOCKED-BY-CREDITS`，并在 §4.5 给出可执行的人工验证方法与期望证据；host-engine 的单测（value 映射/schema 合法性）作为静态与单元层面的补充证据。
 
 ---
 
@@ -96,8 +97,9 @@
 | E-07 | P0 | 可关会话 | UI 关闭按钮 / `POST /close` | 会话从列表移除；`/sessions` 不再含该 id；snapshot 对该 id 4xx | AUTO-HTTP/UI |
 | E-08 | P0 | SSE 实时输出 | `GET /events?id=` 订阅后执行命令 | `output` 帧在产品化时延内到达（目标 <2s），`seq` 递增；首帧 `snapshot` | AUTO-SSE |
 | E-09 | P0 | 拦截生效（B） | agent 调用内置 `pwsh` 工具执行命令 | 面板出现 `kind:'command'` 会话并实时输出；工具结果正常（agent 不报错）；value 符合内置工具 schema | MANUAL（见 §4.5 T-02） |
-| E-10 | P0 | `terminal_screenshot` 返回屏幕文本（C） | agent 调 `terminal_screenshot` | value 含 `text`/`ansi`/`cols`/`rows`/`cursor`，text 与当前屏幕一致 | MANUAL（见 §4.5 T-04） |
+| E-10 | P0 | `live_terminal_screenshot` 返回屏幕文本（C） | agent 调 `live_terminal_screenshot` | value 含 `text`/`ansi`/`cols`/`rows`/`cursor`，`text` 与当前屏幕一致；**不含图片块**（用户确认文本快照） | MANUAL（见 §4.5 T-04） |
 | E-11 | P1 | desktop profile 安装后同样工作 | Lead 在确认后安装到 desktop profile 并重启 Desktop | 同 E-04/E-05 | Lead（不在 QA 自动范围） |
+| E-12 | P0 | agent 命令会话自动打开面板（契约 §5.2） | 右侧栏未打开面板时，agent 执行一条前台 `pwsh` 命令（拦截管线） | 右侧栏自动打开并显示“终端面板”tab，可看到命令会话实时输出；同一浏览器标签页最多自动打开一次；若面板已打开则不重复开 tab | MANUAL-LEAD（见 §4.5 T-11） |
 
 ### 4.2 e2e 场景（architecture.md §6.2）
 
@@ -137,9 +139,9 @@
 | H-11 | P0 | `POST /close {id}` | 200 `{ok:true}`；`/sessions` 移除；snapshot 该 id 4xx `{error}` |
 | H-12 | P1 | snapshot 缺 id / 未知 id | 4xx + `{error:string}`，不崩溃、不 500 堆栈泄漏 |
 | H-13 | P1 | `POST /input` 未知 id | 4xx + `{error}` |
-| H-14 | P1 | `POST /resize` 非法 cols/rows（0、负数、字符串、超大） | 4xx + `{error}` |
+| H-14 | P1 | `POST /resize` 非整数 cols/rows（字符串等） | 4xx + `{error}`；越界数值（0/负数）接受 4xx 或安全钳制（实现策略记录在报告中） |
 | H-15 | P1 | 非法 JSON body | 4xx；进程不崩溃、后续请求仍正常 |
-| H-16 | P1 | 请求体 > 上限（>1MB） | 有界读取：4xx/413，不 OOM、不挂起 |
+| H-16 | P1 | 请求体 > 上限（>1MB） | 有界读取：4xx/413（`{error}`）或不 OOM、不挂起；若连接被直接重置导致客户端拿不到错误响应，记为缺陷（契约 §4.4 错误统一 JSON） |
 | H-17 | P2 | 客户端在 SSE 中触发 `req.close` 清理 | 连续 5 次建立/断开 SSE 后 `/sessions`、新 SSE 仍正常（无订阅泄漏迹象） |
 | H-18 | P2 | 20s 心跳注释 | SSE 连接 21s 内收到 `:` 注释帧（`--slow` 时执行） |
 
@@ -150,7 +152,7 @@
 | B-01 | P0 | 中文/UTF-8 | `Write-Output '中文测试-终端面板-ABC'` | snapshot.text 精确包含该串；无 `�` |
 | B-02 | P1 | UTF-8 跨块 | `Write-Output ('中文ABC' * 400)`（大段 CJK 输出，覆盖解码器流式边界） | text 无替换符 `\uFFFD`；内容连续正确 |
 | B-03 | P1 | ANSI | `Write-Host 'qa-red' -ForegroundColor Red`（及直接 ESC 序列命令） | snapshot.screen 含 `\x1b[`；snapshot.text 不含 ESC 控制符且含 `qa-red` |
-| B-04 | P1 | 长输出 | `1..500 \| ForEach-Object { "qa-line-$_" }` | 无超时/崩溃；可见屏只保留屏高文本，最后一行包含 `qa-line-500`；ring 字节约为 `maxOutputBytes` 上限语义（可用 `terminal_read` 人工验证） |
+| B-04 | P1 | 长输出 | `1..500 \| ForEach-Object { "qa-line-$_" }` | 无超时/崩溃；可见屏只保留屏高文本，最后一行包含 `qa-line-500`；ring 字节约为 `maxOutputBytes` 上限语义（可用 `live_terminal_read` 人工验证） |
 | B-05 | P1 | 已退出会话 | 交互 shell 输入 `exit\r` | `/sessions` 中 state 变 `exited`，exitCode=0；快照仍可读；不重复 exit 帧 |
 | B-06 | P1 | 多会话隔离 | 2 个会话分别输出 `qa-A` / `qa-B` | 各自 snapshot 只含自己的输出 |
 | B-07 | P2 | 大输入（合法上限内） | 一次 `/input` 发 ~64KB 文本 | 200 且不破坏会话；超出上限则 4xx |
@@ -163,16 +165,17 @@
 
 | ID | P | 项 | 验证方法 | 期望/判定 |
 |---|---|---|---|---|
-| T-01 | P0 | 工具注册齐全 | 静态审查 + dev host 工具目录/日志；或 Lead 让 agent 调 `terminal_list` | 7 个工具均注册：`terminal_run/screenshot/send/read/list/open/close`；参数为 JSON Schema 对象；`output.schema` 合法且 runtime 校验通过 |
+| T-01 | P0 | 工具注册齐全 | 静态审查 + dev host 工具目录/日志；或 Lead 让 agent 调 `live_terminal_list` | 7 个工具均注册：`live_terminal_run/screenshot/send/read/list/open/close`；参数为 JSON Schema 对象；`output.schema` 合法且 runtime 校验通过 |
 | T-02 | P0 | 拦截内置 pwsh | Lead 在 dev host 新会话发：“用 pwsh 工具运行 `Write-Output 'intercept-ok'`” | 面板出现命令会话（标题=命令首行）并实时输出 `intercept-ok`；工具结果正常，agent 不报错 |
 | T-03 | P0 | 拦截回退 | Lead 发：“用 pwsh 运行 `Start-Sleep 3; Write-Output done` 并 `run_in_background: true`” | 不进入可见面板（走原实现/后台 job）；无报错；沙箱/审批语义不变 |
-| T-04 | P0 | `terminal_screenshot` | Lead 发：“打开一个终端运行 `vim` 或 `Get-Process`，然后 terminal_screenshot” | 返回 `text` 是当前可见屏内容（TUI 场景可读）；value 严格符合 schema；render 首行含 `[terminal ...]` 标记 |
-| T-05 | P1 | 命令超时 | Lead 发：“terminal_run 执行 `Start-Sleep 10`，timeoutMs 2000” | `timedOut:true`、`exitCode:null`；会话终止；下次 `terminal_run` 自动重建会话 |
-| T-06 | P1 | `wait:false` + `terminal_read` | Lead 发：“terminal_run `1..20 \| %{ Start-Sleep -Milliseconds 200; $_ }`，wait:false，然后 terminal_read” | 立即返回 `stillRunning:true`；read 能读到递增输出 |
-| T-07 | P1 | `terminal_send/open/close/list` | Lead 驱动 | open 创建新可见交互会话；send 写入并 submit；list 返回 SessionInfo[]；close 移除 |
-| T-08 | P1 | agent 默认终端复用 | Lead 连续两次 `terminal_run` | 同一 agent 复用同一默认交互终端（terminalId 相同），不重复创建 |
-| T-09 | P2 | 系统提示指南 | 静态审查 `prompt.js` | `ctx.systemPrompt.section` 注册 `tool:terminal-panel`，文案说明“命令自动显示在终端面板 / 用 terminal_screenshot 看屏幕” |
+| T-04 | P0 | `live_terminal_screenshot` | Lead 发：“打开一个终端运行 `vim` 或 `Get-Process`，然后 live_terminal_screenshot” | 返回 `text` 是当前可见屏内容（TUI 场景可读）；value 严格符合 schema；render 首行含 `[terminal ...]` 标记；返回文本而非图片（用户确认） |
+| T-05 | P1 | 命令超时 | Lead 发：“live_terminal_run 执行 `Start-Sleep 10`，timeoutMs 2000” | `timedOut:true`、`exitCode:null`；会话终止；下次 `live_terminal_run` 自动重建会话 |
+| T-06 | P1 | `wait:false` + `live_terminal_read` | Lead 发：“live_terminal_run `1..20 \| %{ Start-Sleep -Milliseconds 200; $_ }`，wait:false，然后 live_terminal_read” | 立即返回 `stillRunning:true`；read 能读到递增输出 |
+| T-07 | P1 | `live_terminal_send/open/close/list` | Lead 驱动 | open 创建新可见交互会话；send 写入并 submit；list 返回 SessionInfo[]；close 移除 |
+| T-08 | P1 | agent 默认终端复用 | Lead 连续两次 `live_terminal_run` | 同一 agent 复用同一默认交互终端（terminalId 相同），不重复创建 |
+| T-09 | P2 | 系统提示指南 | 静态审查 `prompt.js` | `ctx.systemPrompt.section` 注册 `tool:terminal-panel`，文案说明“命令自动显示在终端面板 / 用 live_terminal_screenshot 看屏幕” |
 | T-10 | P2 | 超时取消（exec.signal abort） | host-engine 单测/人工 | abort 时 terminate 会话并返回 `aborted:true` |
+| T-11 | P0 | 自动打开行为（契约 §5.2） | Lead 驱动：先关闭右侧栏/面板，再让 agent 执行一条前台 pwsh 命令；由 QA 在浏览器观察（可配合 `qa-e2e.mjs` 的 U-01～U-04 复现布局） | 新 `kind:'command' & owner:'agent' & state:'running'` 会话出现时右侧栏自动打开并显示终端面板；每浏览器标签页最多自动打开一次；面板已开时不重复开 tab |
 
 ### 4.6 静态契约一致性（L1，逐条对照 architecture.md）
 
@@ -181,11 +184,11 @@
 | S-01 | P0 | 路由：方法/路径/请求/响应形状完全一致；前缀 `/dsh-terminal-panel` | §4.4 |
 | S-02 | P0 | SSE：`event:`/`data:` 帧格式、事件名、心跳注释、`req.close` 清理 | §4.4 |
 | S-03 | P0 | `SessionInfo` 字段/枚举与 §4.4 一致（id/title/kind/owner/sessionId/agentId/command/cwd/cols/rows/state/exitCode/error/createdAt/updatedAt） | §4.4 |
-| S-04 | P0 | 工具名/参数/返回/默认值/render 与 §4.5 完全一致（含 `terminal_run` 的 `timedOut/aborted/stillRunning`） | §4.5 |
+| S-04 | P0 | 工具名/参数/返回/默认值/render 与 §4.5 完全一致（7 个工具均带 `live_` 前缀；含 `timedOut/aborted/stillRunning`） | §4.5 |
 | S-05 | P0 | 拦截条件与回退：仅 `pwsh`/`bash`；`run_in_background`/`sandbox_permissions` 走 `next()`；失败回退 `next()` | §4.6 |
 | S-06 | P1 | 配置项名/默认值：`interceptShellTools/shellPath/scrollback/maxOutputBytes/maxSessions/commandTimeoutMs/retainExited` | §4.1 |
 | S-07 | P1 | host 侧 `inject=['tools']`；不 import `@deepseek-ai/*`；headless xterm 经 `createRequire` | §4.1 |
-| S-08 | P1 | 客户端：`inject` 服务、`sidebarRightTabs.register`（multiple/priority/guide）、`slots.inject('sidebar.right.pane.tab')`、locale zh/en、guide 文案“终端面板” | §5.1–5.2 |
+| S-08 | P1 | 客户端：`inject` 服务、`sidebarRightTabs.register`（multiple/priority/guide）、`slots.inject('sidebar.right.pane.tab')`、locale zh/en、guide 文案“终端面板”、自动打开（每标签页一次） | §5.1–5.2 |
 | S-09 | P1 | 构建产物：单文件 `lib/client.js`、`window.__ModuleLoader__.load` 包装、external 仅平台基座、xterm/CSS 打包进 bundle、`<style data-plugin>` 幂等注入 | §5.3 |
 | S-10 | P1 | 单测覆盖 §6.1：ansi/ring/wrapper 解析/value 映射 | §6.1 |
 | S-11 | P2 | 会话语义：命令会话保留 `retainExited`、交互会话不自动移除、单 writer 串行、EOF flush | §4.2–4.3 |

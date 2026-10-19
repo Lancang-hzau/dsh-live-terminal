@@ -74,6 +74,15 @@ the screenshot requirement.
 | Bundler in DSH install | none. `esbuild`, `lightningcss`, `tsdown` are **not** in `app.asar`; install them as devDependencies of the plugin. |
 | npm access | verified: `npm view @deepseek-ai/dsh-tools@0.2.1-rc.2 dist.tarball` and `npm view @xterm/xterm@6.0.0 version` succeed |
 
+Host-side xterm is also present in the asar at
+`/dsh/node_modules/@xterm/headless` and `/dsh/node_modules/@xterm/addon-serialize`
+(the official terminal controller lazy-requires them). Both are pure JS and
+publish the same versions on npm, so the plugin can declare them as normal
+dependencies. The **browser** `@xterm/xterm` is *not* a separate asar package;
+it is bundled inside `dsh-client-ui-sidebar-terminal/lib/client.terminal.js`,
+so a custom panel must install `@xterm/xterm` + `@xterm/addon-fit` from npm and
+bundle them.
+
 The environment’s file policy is `danger-full-access` for this research
 session, but the deliverable constraints are: **read-only on `D:\DSH` and
 `C:\Users\LANCANG\.dsh`; write only under
@@ -140,6 +149,32 @@ artifacts). Nothing in this document requires editing DSH itself.
    documented factory contract (`ClientBundleRequire.async`,
    `dsh-client-modules/lib/types/client/manifest.d.ts:187-193`).
 
+### 2.1 Prior art in this workspace (why build this plugin)
+
+`research/existing-plugins.md` evaluated the ecosystem before this blueprint:
+
+- The official right-sidebar terminal already satisfies **A** (interactive
+  xterm + real PTY) but is excluded from the Agent transcript by design
+  (`dsh-client-ui-sidebar-terminal/README.md`, “Known Limitations”). It cannot
+  satisfy B/C.
+- `@hyzyn/dsh-tty` 0.32.3 is the closest existing A+B+C(text) plugin: own PTY
+  via `spawnTerminal`, xterm panel, 19 tools, `tty_screen` text capture
+  (`research/existing-plugins.md:119-155`). It does **not** produce an image,
+  injects its sidebar entry by DOM mutation, and reaches into DSH’s node-pty
+  handle internals on Windows — not a stable base.
+- `dsh-terminal-button` 0.4.3 proves the “reuse the official TerminalBody in a
+  bottom/other surface” path, but it is still a **user** terminal, not an Agent
+  bridge (`research/existing-plugins.md:175-182`).
+- No plugin provides a terminal-buffer image screenshot; the existing
+  screenshot plugins capture a monitor/window, not a terminal by id
+  (`research/existing-plugins.md:191-212`).
+
+The design above is deliberately smaller than `dsh-tty` (four tools, one
+bottom panel, no SSH/SFTP/tunnel surface) and uses only public services plus
+the documented client bundle format. The riskiest private-API dependencies in
+the ecosystem (DOM injection, `modules.importChunk`, node-pty internals) are
+avoided.
+
 ---
 
 ## 3. Plugin package contract
@@ -158,6 +193,7 @@ packages/dsh-terminal-panel/
     live-terminal.ts           # LiveTerminal + LiveTerminalRegistry
     routes.ts                  # SSE / input / sessions HTTP surface
     tools.ts                   # four defineTool definitions
+    skill.ts                   # ctx.skills.register(...)
     png.ts                     # optional SVG -> PNG via sharp
     protocol.ts                # shared wire types (host + client)
     client/
@@ -214,44 +250,33 @@ packages/dsh-terminal-panel/
     "node": "^22.19.0 || >=24.0.0"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "~4.0.5"
+    "@deepseek-ai/cordis": "~4.0.5",
+    "@deepseek-ai/schemastery": "~3.18.5",
+    "@deepseek-ai/dsh-tools": "0.2.1-rc.2"
   },
   "dependencies": {
     "@xterm/headless": "6.0.0",
     "@xterm/addon-serialize": "0.14.0"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-agent": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-attachment": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-client-store": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-client-ui-conversation": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-client-ui-layout": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-client-ui-primitives": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-client-ui-renderer": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-client-ui-session": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-client-ui-slots": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-client-ui-tool": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-llm": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-sandbox": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-sandbox-policy": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-session": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-skill": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-subprocess": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-system-prompt": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-tools": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-working-directory": "0.2.1-rc.2",
-    "@deepseek-ai/schemastery": "~3.18.5",
     "@types/node": "^22.20.0",
     "@types/react": "~18.3.1",
     "@xterm/addon-fit": "0.11.0",
     "@xterm/xterm": "6.0.0",
     "esbuild": "^0.25.10",
     "lightningcss": "^1.33.0",
-    "react": "^18.3.1",
     "typescript": "^5.9.3"
   }
 }
 ```
+
+> **Do not put `@deepseek-ai/dsh-*` in `devDependencies` of the linked
+> package.** npm installs devDependencies, and Node will then resolve the
+> plugin’s runtime `import '@deepseek-ai/dsh-tools'` to that local copy instead
+> of the Host’s copy — the duplicate-host-package failure mode. Type
+> declarations for typecheck belong in a separate, non-ancestor
+> `tools/typecheck` project (see §9.6). The `@xterm/*` entries are different:
+> they are bundled/host-local and intentionally installed.
 
 Notes / rationale:
 
@@ -493,18 +518,23 @@ Minimal client entry:
 // src/client/panel-store.ts
 import { defineStore } from '@deepseek-ai/dsh-client-store'
 
-export const panelStore = defineStore({
-  init: () => ({ open: false, height: 320 }),
-  persist: 'dsh.terminal-panel.panel.v1',
-  actions: {
-    show(d) { d.open = true },
-    hide(d) { d.open = false },
-    toggle(d) { d.open = !d.open },
-    setHeight(d, px: number) { d.height = Math.max(160, Math.min(900, Math.round(px))) },
-  },
-})
+// Factory, not a module-level handle: dsh-client-store explicitly warns that a
+// module-level handle is a disguised singleton across plugin reloads
+// (dsh-client-store/lib/types/contract.d.ts:73-79).
+export function createPanelStore() {
+  return defineStore({
+    init: () => ({ open: false, height: 320 }),
+    persist: 'dsh.terminal-panel.panel.v1',
+    actions: {
+      show(d) { d.open = true },
+      hide(d) { d.open = false },
+      toggle(d) { d.open = !d.open },
+      setHeight(d, px: number) { d.height = Math.max(160, Math.min(900, Math.round(px))) },
+    },
+  })
+}
 
-export type PanelStore = typeof panelStore
+export type PanelStore = ReturnType<typeof createPanelStore>
 ```
 
 ```tsx
@@ -512,7 +542,8 @@ export type PanelStore = typeof panelStore
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
-import { panelStore } from './panel-store.js'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import { createPanelStore } from './panel-store.js'
 import { TerminalDock } from './TerminalDock.js'
 import { TerminalToggle } from './TerminalToggle.js'
 
@@ -520,6 +551,8 @@ export const name = 'dsh-terminal-panel-client'
 export const inject = ['slots']
 
 export function apply(ctx: Context): void {
+  const panelStore = createPanelStore()
+
   // Primary seat: full-width bottom dock.
   ctx.slots.inject('shell.bottom', () => ctx.slots.register({
     name: 'shell.bottom',
@@ -648,6 +681,7 @@ little benefit.
 import { useEffect, useRef } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import '@xterm/xterm/css/xterm.css'
 import type { PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ServerEvent } from '../protocol.js'
 import type { PanelStore } from './panel-store.js'
@@ -673,7 +707,7 @@ export function TerminalDock({ useStore, actions }: Props) {
       rows: 30,
       scrollback: 1000,
       allowProposedApi: true,
-      fontFamily: 'var(--dsh-font-family-code, Consolas, monospace)',
+      fontFamily: "Consolas, 'Cascadia Mono', 'Courier New', monospace",
       fontSize: 13,
       theme: { background: '#111318', foreground: '#e6e6e6', cursor: '#e6e6e6' },
     })
@@ -872,17 +906,17 @@ export function registerEventRoute(ctx: Context, live: LiveTerminalRegistry): vo
     webCtx.effect(() => webCtx.webServer.register({
       kind: 'exact',
       path: '/dsh-terminal-panel/events',
-      handler: (req, res) => {
+      handler: async (req, res) => {
         if (!authorize(webCtx.connection, req, res)) return
         const url = new URL(req.url ?? '/', 'http://dsh.invalid')
         const wanted = url.searchParams.get('terminal') ?? undefined
         const client = new SseClient(res)
         const terminal = live.pick(wanted)
         if (terminal) {
-          client.sendSnapshot(terminal)
-          terminal.attach(client)
+          // Atomic: register the client and send the snapshot in one queued step.
+          await terminal.attach(client)
+          client.send({ type: 'state', terminal: terminal.info })
         }
-        client.send({ type: 'state', terminal: terminal?.info ?? null })
         const heartbeat = setInterval(() => client.comment('ping'), 20_000)
         const cleanup = () => {
           clearInterval(heartbeat)
@@ -970,6 +1004,12 @@ Notes:
 - A slow follower is dropped at the byte cap; EventSource reconnects and gets a
   fresh snapshot. This is the same “slow followers fail explicitly” policy the
   official terminal uses (`dsh-api-terminal-controller/lib/types/stream.js`).
+- **Snapshot and attach must be atomic** with respect to output: if you send a
+  snapshot, then `attach(client)`, a chunk produced between those two steps is
+  lost. Implement `terminal.attach(client)` as one queued operation that
+  registers the client and returns/sends the snapshot under the same
+  `enqueue()` chain (the official `BrowserTerminal.attach` does this inside one
+  `enqueue`).
 - `req.once('close')` and `res.once('close')` both fire in different Node paths;
   make `cleanup` idempotent.
 - Do not set `Content-Length`; do not let the web server’s gzip wrapper touch
@@ -1565,6 +1605,7 @@ export class LiveTerminal {
     return this.enqueue(async () => {
       await this.handle.resize(cols, rows)
       this.screen.resize(cols, rows)
+      this.infoState = { ...this.infoState, cols, rows }
       this.broadcast({ type: 'state', terminal: this.info })
     })
   }
@@ -1574,6 +1615,7 @@ export class LiveTerminal {
     let lastSeq = this.seq
     let lastOutput = Date.now()
     while (Date.now() < deadline) {
+      opts.signal?.throwIfAborted()
       await sleep(50)
       if (this.seq !== lastSeq) {
         lastSeq = this.seq
@@ -1606,8 +1648,16 @@ export class LiveTerminal {
     })
   }
 
-  attach(client: { send(event: ServerEvent): void }): void {
-    this.clients.add(client)
+  async attach(client: { send(event: ServerEvent): void }): Promise<void> {
+    await this.enqueue(() => {
+      client.send({
+        type: 'snapshot',
+        terminal: this.info,
+        seq: this.seq,
+        ansi: this.serializer.serialize({ scrollback: 0 }),
+      })
+      this.clients.add(client)
+    })
   }
 
   detach(client: { send(event: ServerEvent): void }): void {
@@ -1624,9 +1674,11 @@ export class LiveTerminal {
     try {
       const outcome = await this.handle.done
       this.exitCode = outcome.exitCode
-      this.broadcast({ type: 'state', terminal: { ...this.info, state: 'exited', exitCode: outcome.exitCode } })
+      this.infoState = { ...this.infoState, state: 'exited', exitCode: outcome.exitCode }
+      this.broadcast({ type: 'state', terminal: this.info })
     } catch (error) {
-      this.broadcast({ type: 'state', terminal: { ...this.info, state: 'failed' } })
+      this.infoState = { ...this.infoState, state: 'failed' }
+      this.broadcast({ type: 'state', terminal: this.info })
     }
   }
 
@@ -1725,8 +1777,8 @@ DOM. Feeding it the exact PTY byte stream gives:
 The official user terminal already does exactly this host-side:
 `BrowserTerminal` constructs a headless `Terminal` + `SerializeAddon`, feeds
 `screen.write(data, resolve)`, and returns `serializer.serialize()` in its
-`snapshot` frame (`dsh-api-terminal-controller/lib/types/terminal.js:8-45,
-66-72`). Our plugin reuses the pattern but exposes it to the Agent.
+`snapshot` frame (`dsh-api-terminal-controller/lib/types/terminal.js:7-37,
+76-82`). Our plugin reuses the pattern but exposes it to the Agent.
 
 ```ts
 // visible text grid
@@ -1786,13 +1838,15 @@ output: {
   render: (_args, value) => {
     const blocks: ContentBlock[] = [{ type: 'text', text: value.text }]
     if (value.image) {
-      blocks.push({ type: 'image', attachment: {
-        attachmentId: value.image.attachmentId as never,
-        mediaType: value.image.mediaType as never,
+      type ImageRef = import('@deepseek-ai/dsh-attachment').ImageAttachmentRef
+      const attachment: ImageRef = {
+        attachmentId: value.image.attachmentId as ImageRef['attachmentId'],
+        mediaType: value.image.mediaType as ImageRef['mediaType'],
         bytes: value.image.bytes,
         width: value.image.width,
         height: value.image.height,
-      } })
+      }
+      blocks.push({ type: 'image', attachment })
     }
     return blocks
   },
@@ -2071,11 +2125,9 @@ const PLATFORM_MODULES = [
 const cssPlugin = {
   name: 'dsh-css',
   setup(buildApi) {
-    buildApi.onResolve({ filter: /\.css$/ }, args => ({
-      path: resolve(args.resolveDir, args.path),
-      namespace: 'dsh-css',
-    }))
-    buildApi.onLoad({ filter: /.*/, namespace: 'dsh-css' }, async args => {
+    // Let esbuild resolve the specifier (including package CSS such as
+    // @xterm/xterm/css/xterm.css), then replace the CSS output with a JS module.
+    buildApi.onLoad({ filter: /\.css$/ }, async args => {
       const source = await readFile(args.path)
       const isModule = /\.module\.css$/i.test(args.path)
       const result = transform({
@@ -2163,14 +2215,14 @@ Notes:
 - CSS module class names are hashed (`dshTerm_<hash>_<local>`); the default
   export is a plain object. The injected `<style>` is tagged with
   `data-plugin` and `data-plugin-css` so HMR/unload can find it (the official
-  bundles use the same convention, e.g. `dsh-client-ui-sidebar-terminal/lib/client.js:14-21`).
+  bundles use the same convention, e.g. `dsh-client-ui-sidebar-terminal/lib/client.js:13-19`).
 - A lazy chunk is optional. If you add one, build a second CJS bundle from
   `src/client/terminal-panel.tsx`, wrap it with
   `{ id: pkg.name, chunk: "client.terminal.js", factory }`, and load it with
   `const mod = await require.async("./client.terminal.js")`. The chunk must be
   self-contained and may require only platform seeds / declared externals
   (`ClientBundleRequire.async`, `dsh-client-modules/lib/types/client/manifest.d.ts:187-193`;
-  official example: `dsh-client-ui-sidebar-terminal/lib/client.js:169-171`).
+  official example: `dsh-client-ui-sidebar-terminal/lib/client.js:167`).
 - For a production plugin, add `minify: true`; xterm + React glue will be
   ~400–500 KB minified. The official sidebar terminal’s lazy chunk is ~686 KB.
 
@@ -2191,18 +2243,110 @@ Notes:
 `--watch` is not in the sketch above; add an esbuild `context()` branch if you
 want it. For the normal dev loop, a rebuild + page reload is sufficient.
 
-### 9.6 Dev dependencies for typecheck
+### 9.6 Typecheck without duplicate host packages
 
-`tsc` needs the `@deepseek-ai/*` type declarations. Install the exact versions
-as devDependencies (they are public on npm; `npm view
-@deepseek-ai/dsh-tools@0.2.1-rc.2 dist.tarball` succeeds). Do not put them in
-`dependencies`. The profile runtime supplies the actual implementation; the
-devDependencies only provide `.d.ts` files.
+This is the subtle packaging trap in DSH plugin development. A Host plugin
+imports `@deepseek-ai/dsh-tools`, `@deepseek-ai/schemastery`, etc. at runtime.
+The profile runtime resolver supplies the **Host’s** copies. If the plugin’s
+own `node_modules` contains another copy, Node resolves the plugin’s local copy
+first (normal `node_modules` lookup), and two tool registries / two Cordis
+service systems / two `schemastery` instances can break the Host. The known
+symptom is every tool call failing with a missing `prepare` (prior research:
+`research/existing-plugins.md:239`).
 
-If npm install is unavailable in a locked-down environment, a fallback is to
-copy the extracted `lib/types` declarations into `types/` and add `paths`
-mappings in `tsconfig`; this is brittle and must be re-done for every DSH
-version. Prefer npm.
+Therefore:
+
+- **Do not install `@deepseek-ai/*` host packages into
+  `packages/dsh-terminal-panel/node_modules`.** Keep them in
+  `peerDependencies` only, and install dev dependencies with
+  `npm install --legacy-peer-deps` (or a `.npmrc` containing
+  `legacy-peer-deps=true`). npm then installs esbuild/lightningcss/typescript
+  and `@xterm/*`, but not the peers.
+- `tsc` still needs the declarations. Put them in a **typecheck project outside
+  the plugin package’s resolution ancestry**:
+
+```
+C:\Users\LANCANG\Desktop\Code\DSH plugin\
+  packages\dsh-terminal-panel\        # the linked package (no host packages)
+  tools\typecheck\
+    package.json                      # devDeps: @deepseek-ai/* type packages
+    node_modules\                     # installed here, NOT under packages/
+```
+
+`tools/typecheck/package.json`:
+
+```json
+{
+  "name": "dsh-terminal-panel-typecheck",
+  "private": true,
+  "devDependencies": {
+    "@deepseek-ai/cordis": "~4.0.5",
+    "@deepseek-ai/dsh-agent": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-attachment": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-store": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-conversation": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-layout": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-renderer": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-session": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-tool": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-host-webserver": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-llm": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-sandbox": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-sandbox-policy": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-session": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-skill": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-subprocess": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-system-prompt": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-terminal": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-tools": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-working-directory": "0.2.1-rc.2",
+    "@deepseek-ai/schemastery": "~3.18.5"
+  }
+}
+```
+
+Add `paths` to both `tsconfig.host.json` and `tsconfig.client.json` (they live
+in `packages/dsh-terminal-panel`, so the relative path is `../../tools/...`):
+
+```json
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@deepseek-ai/*": ["../../tools/typecheck/node_modules/@deepseek-ai/*"]
+    }
+  }
+}
+```
+
+TypeScript resolves `@deepseek-ai/dsh-tools` and subpaths like
+`@deepseek-ai/dsh-tools/types` through the wildcard. The typecheck project’s
+`node_modules` is not an ancestor of `packages/dsh-terminal-panel/lib/index.js`,
+so the runtime never finds those copies.
+
+Install and typecheck:
+
+```powershell
+cd "C:\Users\LANCANG\Desktop\Code\DSH plugin\tools\typecheck"
+npm install
+cd "..\..\packages\dsh-terminal-panel"
+npm install --legacy-peer-deps
+npm run typecheck
+```
+
+Alternative for maintainers with a DSH source checkout: symlink the Harness
+packages into the plugin’s `node_modules` so they resolve to the **same
+realpath** as the Host (the pattern in
+`dsh-better-display/scripts/link-harness-dependencies.mjs`). Do not symlink to
+an extracted copy under `%TEMP%`: the realpath differs from the Host module, so
+you reintroduce duplicate module identity. The separate typecheck project is
+simpler and has no runtime path at all.
+
+If npm is unavailable, a fallback is to copy the extracted `lib/types`
+declarations into `tools/typecheck/types` and point `paths` there; still keep
+them outside `packages/dsh-terminal-panel`. It is brittle across DSH versions.
 
 ---
 
@@ -2322,8 +2466,8 @@ hand-editing).
 
 ```powershell
 cd "C:\Users\LANCANG\Desktop\Code\DSH plugin\packages\dsh-terminal-panel"
-npm install                 # once: devDeps + xterm + headless xterm
-npm run build               # host tsc + client esbuild
+npm install --legacy-peer-deps   # once: build tools + xterm; do NOT install host peers
+npm run build                    # host tsc + client esbuild
 ```
 
 Then pick one:
@@ -2459,7 +2603,10 @@ remove the dependency and bundle entry manually and run pnpm install.
     either accept last-writer-wins or add a “control” token in the UI.
 18. **Use the CSS token fonts**, not a hard-coded `monospace` only; the
     Settings terminal font and `--dsh-terminal-font-size` should be honored for
-    consistency with the official terminal.
+    consistency with the official terminal. xterm measures glyphs in a canvas
+    context, where `var(--…)` does not resolve: read the computed family/size
+    from `getComputedStyle(document.body)` and pass concrete values; update or
+    recreate the terminal when the theme/font changes.
 
 ### 11.3 Host / PTY
 
@@ -2516,9 +2663,13 @@ remove the dependency and bundle entry manually and run pnpm install.
 
 ### 11.5 Packaging / install
 
-39. **Never install `@deepseek-ai/dsh-*` as dependencies** of the plugin. The
-    profile runtime already supplies them; a second copy of `dsh-tools` is
-    known to break all tool calls (`research/existing-plugins.md:239`).
+39. **Never install `@deepseek-ai/dsh-*` as dependencies *or* devDependencies
+    of the linked package.** The profile runtime already supplies them; a
+    second copy of `dsh-tools` is known to break all tool calls
+    (`research/existing-plugins.md:239`). Use `peerDependencies` + 
+    `npm install --legacy-peer-deps`, and put type-only declarations in a
+    separate `tools/typecheck` project outside the plugin’s resolution
+    ancestry (§9.6).
 40. **`engines.dsh` is enforced at install/startup.** Use the exact running
     version for local dev; a mismatch requires an exemption
     (`dsh-plugin-manager` “Version compatibility”).
@@ -2691,7 +2842,7 @@ under `%TEMP%\dsh-npm-types\`.
 | Local provider spawn / ConPTY / assets | `%TEMP%\dsh-sdk\pkg\dsh-subprocess-local\lib\index.js:1618-1680`; `...\README.md` (“Running terminal sessions”, “Windows limitations”) |
 | Sandbox spawn pattern | `%TEMP%\dsh-sdk\pkg\dsh-terminal-bash\lib\index.js:1047-1065`; `:950-970` |
 | Sandbox policy resolve / confine | `%TEMP%\dsh-npm-types\dsh-sandbox-policy\package\lib\types\index.d.ts:49-88`; `%TEMP%\dsh-npm-types\dsh-sandbox\package\lib\types\index.d.ts:19-57, 127-141` |
-| Official headless xterm + serialize | `%TEMP%\dsh-sdk\pkg\dsh-api-terminal-controller\lib\types\terminal.js:8-45, 66-72`; package versions `%TEMP%\dsh-sdk\pkg\@xterm__headless\package.json`, `...\@xterm__addon-serialize\package.json` |
+| Official headless xterm + serialize | `%TEMP%\dsh-sdk\pkg\dsh-api-terminal-controller\lib\types\terminal.js:7-37, 76-82`; package versions `%TEMP%\dsh-sdk\pkg\@xterm__headless\package.json`, `...\@xterm__addon-serialize\package.json` |
 | `ctx.terminals` read is line-oriented | `%TEMP%\dsh-npm-types\dsh-terminal\package\lib\types\types.d.ts:91-109` |
 | `BrowserTerminal.attach` needs Remote invocation | `%TEMP%\dsh-sdk\pkg\dsh-api-terminal-controller\lib\types\terminal.js` (`attach`) and `lib\index.js` (`TerminalController.attach`); README “Use this package” |
 | `read_image` image value/render pattern | `%TEMP%\dsh-sdk\pkg\dsh-tool-fs\lib\index.js:928-975, 1027-1055` |
@@ -2719,6 +2870,10 @@ This is the wiring shape; the detailed classes are in §5–§8.
 ```ts
 // src/index.ts
 import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-system-prompt'
+import type {} from '@deepseek-ai/dsh-working-directory'
+import type {} from '@deepseek-ai/dsh-sandbox-policy'
+import type {} from '@deepseek-ai/dsh-client-connection'
 import z from '@deepseek-ai/schemastery'
 import { LiveTerminalRegistry } from './live-terminal.js'
 import { registerRoutes } from './routes.js'
@@ -2726,7 +2881,7 @@ import { registerTools } from './tools.js'
 import { registerSkill } from './skill.js'
 
 export const name = 'dsh-terminal-panel'
-export const inject = ['tools', 'subprocess', 'systemPrompt']
+export const inject = ['tools', 'subprocess', 'systemPrompt', 'workingDirectory', 'sandboxPolicy']
 
 export const Config = z.object({
   shellPath: z.string(),
@@ -2796,7 +2951,11 @@ export function registerRoutes(ctx: Context, live: LiveTerminalRegistry, config:
 
 `ctx` inside `registerRoutes` is the `webCtx` from `ctx.inject(['webServer',
 'connection'], ...)`; its type includes both services after the augmentation
-import (`import type {} from '@deepseek-ai/dsh-client-connection'`).
+import (`import type {} from '@deepseek-ai/dsh-client-connection'` and
+`import type {} from '@deepseek-ai/dsh-host-webserver'`). These type-only
+imports are erased at build time and create no module-table request; they exist
+only so `tsc` sees `ctx.webServer`, `ctx.connection`, `ctx.tools`,
+`ctx.systemPrompt`, `ctx.skills`, etc.
 
 ```ts
 // src/tools.ts — registration list
