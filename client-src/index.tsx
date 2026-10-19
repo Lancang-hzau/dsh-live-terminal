@@ -26,7 +26,7 @@ import type { SessionInfo } from './types'
 export const inject = ['slots', 'locale', 'sidebarRight', 'sidebarRightTabs']
 
 const NAMESPACE = 'dshTerminalPanel'
-const PLUGIN_ID = 'dsh-terminal-panel'
+const PLUGIN_ID = 'dsh-live-terminal'
 const TAB_KIND = 'terminal-panel'
 const STYLE_ATTRIBUTE = 'data-plugin'
 
@@ -168,17 +168,17 @@ export function apply(ctx: ClientContext): void {
   globalRecord.__DSH_TERMINAL_PANEL__ = true
   globalRecord.__DSH_TERMINAL_PANEL_CLIENT__ = {
     plugin: PLUGIN_ID,
-    version: '0.1.0',
+    version: '1.0.0',
     apiPrefix: '/dsh-terminal-panel',
     tabKind: TAB_KIND,
   }
-  console.log('[dsh-terminal-panel] client half loaded')
+  console.log('[dsh-live-terminal] client half loaded')
 
   const t = ctx.locale.bind(NAMESPACE)
 
   ctx.effect(
     () => ctx.locale.register(NAMESPACE, { zh, en }),
-    'dsh-terminal-panel: locale',
+    'dsh-live-terminal: locale',
   )
 
   ctx.effect(
@@ -199,7 +199,7 @@ export function apply(ctx: ClientContext): void {
           },
         ],
       }),
-    'dsh-terminal-panel: tab type',
+    'dsh-live-terminal: tab type',
   )
 
   // The panel body seat. `inject` returns the props the component receives.
@@ -216,7 +216,7 @@ export function apply(ctx: ClientContext): void {
           Panel as unknown as LooseFunction,
         ),
       ),
-    'dsh-terminal-panel: body',
+    'dsh-live-terminal: body',
   )
 
   // Root-scope headless watcher: auto-open the panel for new agent commands.
@@ -241,10 +241,10 @@ export function apply(ctx: ClientContext): void {
     try {
       sidebar.openTab(TAB_KIND, { revealIfOpened: true })
       autoOpenConsumed = true
-      console.log('[dsh-terminal-panel] auto-opened panel for a new agent command session')
+      console.log('[dsh-live-terminal] auto-opened panel for a new agent command session')
     } catch (error) {
       // No on-screen conversation yet (hero/settings): wait for the next one.
-      console.warn('[dsh-terminal-panel] auto-open skipped', error)
+      console.warn('[dsh-live-terminal] auto-open skipped', error)
     }
   }
 
@@ -266,8 +266,8 @@ export function apply(ctx: ClientContext): void {
         )
       })
     } catch (error) {
-      console.warn('[dsh-terminal-panel] auto-open watcher registration failed', error)
+      console.warn('[dsh-live-terminal] auto-open watcher registration failed', error)
       return undefined
     }
-  }, 'dsh-terminal-panel: auto-open watcher')
+  }, 'dsh-live-terminal: auto-open watcher')
 }

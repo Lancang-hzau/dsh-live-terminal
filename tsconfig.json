@@ -16,5 +16,5 @@
       "@deepseek-ai/dsh-client-ui-primitives": ["./types/dsh-client-ui-primitives.d.ts"]
     }
   },
-  "include": ["tools/**/*.mjs", "packages/**/*.ts", "packages/**/*.tsx", "types/**/*.d.ts"]
+  "include": ["tools/**/*.mjs", "client-src/**/*.ts", "client-src/**/*.tsx", "tests/**/*.mjs", "types/**/*.d.ts"]
 }

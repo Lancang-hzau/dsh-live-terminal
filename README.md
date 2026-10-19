@@ -1,71 +1,73 @@
-# DSH 终端面板插件（dsh-terminal-panel）
+# dsh-live-terminal
 
-给 [DeepSeek Harness](https://deepseek.com)（DSH）Desktop / Web GUI 加一个**可见的终端窗口**：
+[DeepSeek Harness](https://deepseek.com)（DSH）的**可见终端面板**插件：把 agent 执行的 shell 命令放进应用内终端窗口里实时显示，并允许 agent 对终端屏幕“截图”（文本屏幕快照，适合 vim/htop 等全屏 TUI）。
 
-- 在右侧栏打开真实 PTY 终端，可交互（PowerShell / cmd / bash）。
-- **DSH agent 执行的 `pwsh` / `bash` 命令自动跑在这个终端里**，输出实时滚动，可直接看到进度，而不是等工具结果。
-- agent 可以用 `live_terminal_screenshot` 工具**截图当前终端屏幕内容（文本）**，适合 vim / htop / 安装器等全屏 TUI 程序。
-- 另有一组 `live_terminal_*` 工具用于交互式会话、后台运行、读取输出、关闭终端等。
+Visible terminal panel for DeepSeek Harness: stream agent shell commands into an in-app terminal **live**, and let the agent take **text screenshots** of the terminal screen (works for full-screen TUI apps too).
 
-> 代码位置：`C:\Users\LANCANG\Desktop\Code\DSH plugin`。不改动 DSH 安装目录 `D:\DSH`；插件按 DSH 官方插件机制安装进 `~/.dsh/profiles/desktop`。
+[![npm](https://img.shields.io/npm/v/dsh-live-terminal)](https://www.npmjs.com/package/dsh-live-terminal)
+[![license](https://img.shields.io/npm/l/dsh-live-terminal)](./LICENSE)
+[![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.2-blue)](https://github.com/deepseek-ai/deepseek-harness)
 
----
+![agent command panel](https://raw.githubusercontent.com/Lancang-hzau/dsh-live-terminal/HEAD/docs/screenshots/01-agent-command-panel.png)
+
+![agent screenshot](https://raw.githubusercontent.com/Lancang-hzau/dsh-live-terminal/HEAD/docs/screenshots/02-screenshot.png)
 
 ## 功能
 
-| 能力 | 说明 |
-| --- | --- |
-| 可见终端窗口 | 右侧栏 → 开始页 → **终端面板**；面板内含多个会话标签，每个都是真实 PTY |
-| 命令实时可见 | agent 的前台 `pwsh`/`bash` 调用自动进入面板（标题为命令首行），输出逐字滚动 |
-| 自动弹出 | agent 开始跑命令时，右侧栏自动打开终端面板（每个页面标签最多一次，避免打扰） |
-| 屏幕截图 | `live_terminal_screenshot` 返回当前可见屏幕文本 + 光标位置 + 尺寸；TUI 程序同样有效 |
-| 交互 | 面板里可直接键盘输入；“新建终端”开一个自己的 shell；支持窗口大小自适应（resize） |
-| 会话工具 | `live_terminal_open/run/send/read/list/close`，支持长任务 `wait:false` 后台继续 + 随时截图/读取 |
-| 降级安全 | 带 `run_in_background` 或 `sandbox_permissions` 的 shell 调用仍走 DSH 原生实现，不改变原有审批/沙箱/后台语义 |
+- **在 DSH 右侧栏拉起真实终端**（xterm.js + PTY，支持 PowerShell / cmd / bash），可直接键盘输入、多标签、resize、刷新重连。
+- **接管默认 shell 命令**：DSH agent 的前台 `pwsh` / `bash` 调用自动在面板里执行，输出实时滚动；agent 开始执行时右侧栏自动弹出（每页面最多一次）。
+- **终端截图**：agent 可用 `live_terminal_screenshot` 拿到当前可见屏幕文本 + 光标/尺寸；`live_terminal_run/send/read/list/open/close` 提供长任务、交互输入、会话管理能力。
+- **安全回退**：带 `run_in_background` 或 `sandbox_permissions`（升权）的 shell 调用不会被接管，仍走 DSH 原生实现，保持原有审批/沙箱/后台语义。
+- 中英文界面，跟随 DSH 主题与终端字体字号设置。
 
-## 安装（Desktop）
+## 安装
 
-本机已由开发流程安装到 `~/.dsh/profiles/desktop`（依赖已 link、bundle 已选中）。**Desktop 版 DSH 在启动时读取 profile，不会热加载新插件，因此安装后需要完全退出并重新打开 DeepSeek Harness 一次**；重启后右侧栏开始页会出现“终端面板”。也可直接运行本仓库的 `tools/install-desktop.ps1` 完成安装（幂等）。
-
-若需在新机器安装：
+**桌面版 DSH**（安装后需完全退出并重新打开 DeepSeek Harness 一次）：
 
 ```powershell
-# 1) 把插件包链接进 desktop profile
-& "D:\DSH\resources\runtime\cli\bin\dsh.cmd" plugin --profile desktop add "<本仓库>\packages\dsh-terminal-panel"
-
-# 2) 在 ~/.dsh/profiles/desktop/package.json 的 dsh.profile.bundles 数组末尾加入：
-#    "dsh-terminal-panel"
-# 3) 完全退出并重新打开 DSH（Desktop 不热加载新插件）
+dsh plugin --profile desktop add dsh-live-terminal
 ```
 
-验证是否加载成功（无需 GUI）：
+**Web 版 DSH**：
 
 ```powershell
-# 404 = 未加载（还没重启）；401 = 已加载且鉴权生效（正常）
-try { Invoke-WebRequest "http://127.0.0.1:58966/dsh-terminal-panel/sessions" -UseBasicParsing } catch { [int]$_.Exception.Response.StatusCode }
+dsh plugin --profile web add dsh-live-terminal
+# 重启该 Host 后生效
 ```
 
-卸载：从 `dsh.profile.bundles` 中移除 `dsh-terminal-panel`，并执行
-`dsh plugin --profile desktop remove dsh-terminal-panel`，然后重启 DSH。
-若重启后 DSH 异常，可先把 `~/.dsh/profiles/desktop/package.json` 里的 `dsh-terminal-panel` 从 bundles 移除再重启（仓库 `tools/artifacts/desktop-backup-*` 有安装前备份）。
+**图形界面**：设置 → 插件 → 添加插件，输入 `dsh-live-terminal`。
+
+**插件市场**：在 [awesome-dsh-plugin](https://awesome-dsh-plugin.com/) / dsh-market 中搜索 **Live Terminal** 或 `dsh-live-terminal`。
 
 ## 使用
 
-1. 在对话里让 DSH 执行命令（例如“运行 npm test”）。命令会自动出现在右侧栏的**终端面板**中，实时输出。
-2. 想自己敲命令：右侧栏 → **终端面板** → **新建终端**，或直接点 guide 入口。
-3. 想看 agent 当前终端屏幕：让 agent 调用 `live_terminal_screenshot`（或你在面板里点“截图”复制屏幕文本）。
-4. 需要交互式程序（Python REPL、vim、ssh 等）：agent 用 `live_terminal_open` 建会话，再用 `live_terminal_send` 发送按键/文本。
+1. 正常和 DSH 对话，让它执行命令（例如“运行 npm test”）。命令会自动出现在右侧栏的**终端面板**中，实时输出。
+2. 自己敲命令：右侧栏 → **终端面板** → **新建终端**。
+3. 需要 agent 看当前终端画面：让它调用 `live_terminal_screenshot`（TUI 程序同样有效）。
+4. 交互式程序（Python REPL、vim、ssh 等）：agent 用 `live_terminal_open` 建会话，再用 `live_terminal_send` 发送按键/文本。
 
-## 配置（可选）
+### agent 工具
 
-在 `~/.dsh/profiles/desktop/cordis.patch.yml` 里可以覆盖插件配置：
+| 工具 | 作用 |
+|---|---|
+| `live_terminal_run` | 在可见终端里跑一条命令（独立可见会话），可选择等待完成或立即返回 |
+| `live_terminal_screenshot` | 截取当前/指定终端可见屏幕文本（可含滚动历史） |
+| `live_terminal_open` | 新建交互式可见终端 |
+| `live_terminal_send` | 向交互终端写入文本/按键（Ctrl-C = `\u0003`） |
+| `live_terminal_read` | 读取最近输出 |
+| `live_terminal_list` | 列出终端会话 |
+| `live_terminal_close` | 关闭终端 |
+
+## 配置
+
+在 `~/.dsh/profiles/<profile>/cordis.patch.yml` 覆盖：
 
 ```yaml
-- id: dsh-terminal-panel
-  name: dsh-terminal-panel
+- id: dsh-live-terminal
+  name: dsh-live-terminal
   config:
     interceptShellTools: true   # 是否接管内置 pwsh/bash 前台命令（默认 true）
-    shellPath: null             # 指定交互 shell；null = 自动探测 pwsh → powershell → cmd
+    shellPath: null             # 交互 shell 路径；null = 自动探测 pwsh → powershell → cmd
     scrollback: 2000            # 每个终端的回滚行数
     maxOutputBytes: 262144      # 单次工具结果输出上限
     maxSessions: 16             # 同时保留的终端会话上限
@@ -73,63 +75,72 @@ try { Invoke-WebRequest "http://127.0.0.1:58966/dsh-terminal-panel/sessions" -Us
     retainExited: 10            # 保留多少个已退出命令会话用于回看
 ```
 
-> `interceptShellTools` 关闭后，内置 `pwsh` 行为完全恢复原生（沙箱/审批不变），只有 agent 主动使用 `live_terminal_*` 工具时才有可见终端。
+把 `interceptShellTools` 设为 `false` 可完全恢复原生 shell 行为，只保留 agent 主动使用的 `live_terminal_*`。
 
-## 安全说明（重要）
+## 兼容性
 
-- 可见终端里的命令以**当前 Windows 用户权限**运行，等价于你自己打开的 PowerShell；**不套 DSH 的 agent 文件沙箱**。
-- 带 `sandbox_permissions`（升权）或 `run_in_background` 的 shell 调用不会被接管，仍由 DSH 原生工具执行。
-- 插件 HTTP/SSE 接口复用 DSH 的浏览器签名 cookie 鉴权（`ctx.connection.admit`），非授权请求返回 401/403。
-- 插件是进程内代码（DSH 插件机制如此），只从本仓库安装可信版本；不要安装来源不明的插件。
+- DSH **0.2.1-rc.2**（`engines.dsh: >=0.2.0-rc.2`；`dsh.compatibility.dshReleases` 声明 0.2.1-rc.2 兼容）。
+- Windows 10/11（PowerShell / cmd / Git Bash）与 POSIX（bash）。
+- 运行时依赖：`@xterm/headless`、`@xterm/addon-serialize`（安装时自动安装，纯 JS）。
 
-## 研究结论：现成插件对比
+## 安全说明
 
-调研了 DSH 插件市场（2975 个条目）中的终端/截图类插件，结论摘要：
+- 面板里的命令以**当前系统用户权限**运行，等价于你自己打开的终端，**不套 DSH 的 agent 文件沙箱**；带升权/后台参数的调用不会被接管。
+- 插件 HTTP/SSE 接口复用 DSH 浏览器签名 cookie 鉴权（`ctx.connection.admit`），未授权请求返回 401/403。
+- 截图只读取终端屏幕缓冲，不上传外部服务。
+- DSH 插件以进程内代码运行；只从本仓库/npm 官方源安装可信版本。
 
-- **DSH 自带右侧栏终端**（官方 `ui-sidebar-terminal`）已有“终端窗口”，但官方明确**不把终端输出交给 agent**，也不支持 agent 截图。
-- **官方实验性“持久终端”bundle** 给 agent 6 个 `terminal_*` 工具，但没有可见窗口。
-- **`@hyzyn/dsh-tty`** 是最接近的现成插件：`tty_*` 工具 + 可见面板 + 文本屏幕读取；但它不接管默认 `pwsh` 工具，且通过 DOM 注入/内部 node-pty 句柄实现，跟随版本的风险较高。
-- 其余插件多为“只能开终端/不能给 agent 用/不支持 0.2.1-rc.2/无截图”。
+## 已知限制
 
-因此本项目自研：官方插件机制 + 官方 `ctx.subprocess.spawnTerminal` PTY 原语 + headless xterm 屏幕镜像，实现“默认命令可见 + agent 截图”，并保留原生工具的回退路径。详细调研见 `research/existing-plugins.md`。
+- 终端会话只存在于 Host 进程内，DSH 重启不会恢复。
+- 被接管命令的 stdout/stderr 在 PTY 中合并（结果仍符合内置工具 schema）。
+- 截图是文本屏幕快照，不是 PNG 图片。
+- DSH 升级到新 minor 版本后可能需要适配插件 API（`tools/execute` 拦截、client 模块基座）。
+- 极端情况下（UI 新建终端 → 页面刷新重连 → 关闭），Windows 上可能短暂残留一个 PowerShell/OpenConsole 子进程；重启 DSH 会清理，后续版本跟进。
 
-## 目录结构
+## 为什么自研
 
-```
-packages/dsh-terminal-panel/   插件包（host 半侧 lib/，浏览器半侧 client-src/ → lib/client.js）
-tools/                         构建与 e2e 脚本
-docs/architecture.md           接口契约与设计
-docs/plugin-dev-notes.md       DSH 插件 SDK 调研笔记
-research/                      现成插件调研与对比
-qa/                            独立验收测试计划/脚本
-```
+调研了 DSH 插件市场中的终端/截图类插件后自研：
+
+- 官方右侧栏终端有窗口，但**不把输出交给 agent**、不支持 agent 截图；
+- 官方“持久终端”bundle 有 agent 工具，但**没有可见窗口**；
+- 社区最接近的 `@hyzyn/dsh-tty` 有自己的 `tty_*` 工具，但**不接管默认 pwsh**，且依赖内部句柄实现、版本耦合风险较高。
+
+本插件用官方插件机制 + 官方 `ctx.subprocess.spawnTerminal` PTY 原语 + headless xterm 屏幕镜像，同时满足“默认命令可见 + agent 截图”，并保留原生工具的回退路径。
+
+---
 
 ## 开发
 
-```powershell
-# 构建浏览器半侧（生成 packages/dsh-terminal-panel/lib/client.js）
-node tools/build-client.mjs
+仓库根目录就是可发布的插件包（`package.json` 中的 `dsh.bundle` 声明使其可被 `dsh plugin add` 安装）。
 
-# 单元测试（host 纯逻辑；Node 24 不支持把目录传给 --test，用 glob）
-node --test "packages/dsh-terminal-panel/tests/*.test.mjs"
+```
+lib/                 host 半侧（PTY 会话、SSE、工具、shell 拦截）
+client-src/          浏览器半侧源码（xterm 面板，esbuild 打包成 lib/client.js）
+tests/               host 纯逻辑单元测试（node:test）
+tools/               构建、安装、e2e 脚本
+docs/                architecture.md（接口契约）、test-report.md（验收报告）
+qa/                  独立 QA 测试计划与脚本
+screenshots.json     市场截图清单
+```
+
+```powershell
+npm install                          # 安装构建/测试依赖
+npm run build                        # 构建 client-src → lib/client.js
+npm test                             # host 单元测试（116 cases）
+npm run typecheck
 
 # 独立 dev host（不影响正在运行的 Desktop DSH）
 & "D:\DSH\resources\runtime\cli\bin\dsh.cmd" --profile dev --no-open --port 3101
 # 用日志里的带 token URL 打开页面；右侧栏快捷键：Ctrl+Shift+B
 ```
 
-测试与验收（本机实测，2026-10-19）：
-- host 单测 116/116 PASS。
-- 独立 e2e（QA，真实 Chrome）：44 PASS / 0 FAIL / 1 SKIP（SKIP 为 JSON 协议无法承载非法 UTF-8，超契约范围）。
-- 真实 agent 手动项：pwsh 拦截可见、自动弹出、`live_terminal_run` + `live_terminal_screenshot` 文本截图、cwd=会话工作区，全部 PASS。
-- Desktop 等价组合（base + web-app + agent-team + auto-review + better-display + dsh-context + dshmarket + 本插件）在独立 host 验证：插件 host/client 均正常加载。
-- Desktop 实机安装并重启后：7 个 `live_terminal_*` 工具可用，拦截的 `pwsh` 调用在面板生成 command 会话，`live_terminal_run` / `live_terminal_screenshot` 实测通过。
-- 详细报告：`docs/test-report.md`、`docs/architecture.md`。
+本机验收（2026-10-19）：host 单测 116/116 PASS；独立 e2e（真实 Chrome）44 PASS / 0 FAIL / 1 SKIP；真实 agent 手动项（命令拦截可见、自动弹出、`live_terminal_run` + `live_terminal_screenshot`、cwd）全部 PASS；Desktop 实机安装并重启后验证通过。详见 [`docs/test-report.md`](./docs/test-report.md)。
 
-## 已知限制
+### 发布
 
-- 终端会话只存在于 Host 进程内，DSH 重启后不恢复；重启会清空面板会话。
-- 被接管命令的 stdout/stderr 在 PTY 中合并，与内置工具的分流输出形状不同（结果仍符合内置工具 schema）。
-- 当前截图是文本屏幕快照，不是 PNG 图片；模型不需要看图即可理解终端界面。
-- 依赖 DSH 0.2.1-rc.2 的插件 API；DSH 升级后可能需要适配（尤其是 `tools/execute` 拦截与 client 模块基座）。
-- P3：极端情况下（UI 新建终端 → 页面刷新重连 → 关闭），Windows 上可能短暂残留一个 PowerShell/OpenConsole 子进程；不影响功能，重启 DSH 会清理，后续版本跟进。
+发布到 npm 与提交插件市场的完整步骤见 [`PUBLISHING.md`](./PUBLISHING.md)。
+
+## License
+
+MIT

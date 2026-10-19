@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Build the browser half of dsh-terminal-panel.
+ * Build the browser half of dsh-live-terminal.
  *
- * Bundles `packages/dsh-terminal-panel/client-src/index.tsx` with esbuild
- * (CJS, browser platform, automatic JSX) into one file and wraps it in the
+ * Bundles `client-src/index.tsx` with esbuild (CJS, browser platform, automatic
+ * JSX) into one file and wraps it in the
  * `window.__ModuleLoader__.load({ id, factory })` format the DSH client-modules
  * bootstrap expects (docs/architecture.md §5.3).
  *
@@ -27,14 +27,14 @@ const requireFromRoot = createRequire(import.meta.url)
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = join(here, '..')
-const packageDir = join(repoRoot, 'packages', 'dsh-terminal-panel')
+const packageDir = repoRoot
 const entryPoint = join(packageDir, 'client-src', 'index.tsx')
 const outputFile = join(packageDir, 'lib', 'client.js')
 
 const args = new Set(process.argv.slice(2))
 const minify = !args.has('--no-minify')
 
-const PLUGIN_ID = 'dsh-terminal-panel'
+const PLUGIN_ID = 'dsh-live-terminal'
 
 /**
  * Modules answered by the DSH platform seed table. They must never be bundled:
