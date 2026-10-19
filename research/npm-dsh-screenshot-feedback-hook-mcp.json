@@ -1,0 +1,180 @@
+﻿{
+  "_id": "dsh-screenshot-feedback-hook-mcp@0.2.1",
+  "_rev": "6080754-6a882ccd6de345df1df6bb90",
+  "dist-tags": {
+    "latest": "0.2.1"
+  },
+  "name": "dsh-screenshot-feedback-hook-mcp",
+  "time": {
+    "created": "2026-08-21T10:47:41.322Z",
+    "modified": "2026-08-28T12:00:33.464Z",
+    "0.1.0": "2026-08-21T10:47:29.695Z",
+    "0.1.1": "2026-08-22T13:51:46.462Z",
+    "0.2.0": "2026-08-25T16:24:34.851Z",
+    "0.2.1": "2026-08-28T12:00:21.962Z"
+  },
+  "versions": [
+    "0.1.0",
+    "0.1.1",
+    "0.2.0",
+    "0.2.1"
+  ],
+  "bugs": {
+    "url": "https://github.com/lkh081231/screenshot-feedback-hook-mcp/issues"
+  },
+  "description": "Screenshot feedback for DeepSeek Harness — let your coding agent SEE what it builds",
+  "homepage": "https://github.com/lkh081231/screenshot-feedback-hook-mcp#readme",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "screenshot",
+    "agent",
+    "feedback",
+    "vision"
+  ],
+  "license": "MIT",
+  "maintainers": [
+    "lkh1231 <sebastianlimkh13@gmail.com>"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lkh081231/screenshot-feedback-hook-mcp.git",
+    "directory": "dsh-plugin"
+  },
+  "_source_registry_name": "default",
+  "_contentLength": 12607,
+  "version": "0.2.1",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json",
+    "./client": {
+      "default": "./lib/client.js"
+    }
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-settings-plugins"
+      ]
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && tsdown",
+    "prepare": "tsc -p tsconfig.build.json && tsdown",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-agent": "^0.1.0-rc.8 || ^0.1.1-rc.0",
+    "@deepseek-ai/dsh-attachment": "^0.1.0-rc.8 || ^0.1.1-rc.0",
+    "@deepseek-ai/dsh-llm": "^0.1.0-rc.8 || ^0.1.1-rc.0",
+    "@deepseek-ai/dsh-scope": "^0.1.0-rc.8 || ^0.1.1-rc.0",
+    "@deepseek-ai/dsh-session": "^0.1.0-rc.8 || ^0.1.1-rc.0",
+    "@deepseek-ai/dsh-settings": "^0.1.0-rc.8 || ^0.1.1-rc.0",
+    "@deepseek-ai/dsh-subprocess": "^0.1.0-rc.8 || ^0.1.1-rc.0",
+    "@deepseek-ai/dsh-tools": "^0.1.0-rc.8 || ^0.1.1-rc.0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-agent": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-attachment": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-llm": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-scope": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-session": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-settings": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-subprocess": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-tools": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-agent": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-attachment": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-locale": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-runtime": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-settings": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-settings-plugins": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-slots": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-llm": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-scope": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-session": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-settings": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-subprocess": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-tools": "0.1.0-rc.8",
+    "@types/node": "^22.10.0",
+    "@types/react": "18.3.12",
+    "react": "18.3.1",
+    "tsdown": "^0.22.14",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  },
+  "gitHead": "5dbfdebab83078e93ea75a2050bd6030ac0e86a0",
+  "_nodeVersion": "24.15.0",
+  "_npmVersion": "11.12.1",
+  "dist": {
+    "integrity": "sha512-9RRr7IGBdKrz0C0GEhwNPdWPtzQtsOFEB/rvRTo9BxR1zsCIpf7ecukEM2lcsgoSoTIH1loHzjH4LX6wsGxMqQ==",
+    "shasum": "b8185cfb3ce53197eb6d6cb3139ae06c3f993eec",
+    "tarball": "https://registry.npmmirror.com/dsh-screenshot-feedback-hook-mcp/-/dsh-screenshot-feedback-hook-mcp-0.2.1.tgz",
+    "fileCount": 30,
+    "unpackedSize": 217211,
+    "signatures": [
+      {
+        "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+        "sig": "MEQCIAWKTZ7AeezFt585ZN7l8gJGHpf0dbw+rXakL9vhkMj+AiA241hVPj5wsR2KZ+iOCGS9iCYMPC98PVzSG1vM3paGmQ=="
+      }
+    ],
+    "size": 72800
+  },
+  "_npmUser": "lkh1231 <sebastianlimkh13@gmail.com>",
+  "directories": {},
+  "_npmOperationalInternal": {
+    "host": "s3://npm-registry-packages-npm-production",
+    "tmp": "tmp/dsh-screenshot-feedback-hook-mcp_0.2.1_1787918421808_0.7224602871890162"
+  },
+  "_hasShrinkwrap": false,
+  "_cnpmcore_publish_time": "2026-08-28T12:00:21.962Z",
+  "publish_time": 1787918421962
+}

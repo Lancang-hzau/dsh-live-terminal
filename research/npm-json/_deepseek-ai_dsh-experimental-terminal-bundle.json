@@ -1,0 +1,114 @@
+﻿{
+  "_id": "@deepseek-ai/dsh-experimental-terminal-bundle@0.2.1-alpha.2",
+  "_rev": "6235276-6ac8bee16705f75d33793fd2",
+  "dist-tags": {
+    "alpha": "0.2.1-alpha.5",
+    "latest": "0.2.1-alpha.2",
+    "next": "0.2.1-rc.2"
+  },
+  "name": "@deepseek-ai/dsh-experimental-terminal-bundle",
+  "time": {
+    "created": "2026-10-09T10:16:01.562Z",
+    "modified": "2026-10-17T08:28:50.778Z",
+    "0.2.1-alpha.2": "2026-10-09T08:11:18.139Z",
+    "0.0.0-stage": "2026-10-09T08:09:10.965Z",
+    "0.2.1-alpha.3": "2026-10-14T12:28:00.656Z",
+    "0.2.1-alpha.4": "2026-10-15T12:59:17.273Z",
+    "0.2.1-alpha.5": "2026-10-16T12:22:29.655Z",
+    "0.2.1-rc.1": "2026-10-17T03:08:57.825Z",
+    "0.2.1-rc.2": "2026-10-17T08:28:36.854Z"
+  },
+  "versions": [
+    "0.0.0-stage",
+    "0.2.1-alpha.2",
+    "0.2.1-alpha.3",
+    "0.2.1-alpha.4",
+    "0.2.1-alpha.5",
+    "0.2.1-rc.1",
+    "0.2.1-rc.2"
+  ],
+  "bugs": {
+    "url": "https://github.com/deepseek-ai/deepseek-harness/issues"
+  },
+  "description": "Keep shell processes alive across tool calls.",
+  "homepage": "https://github.com/deepseek-ai/deepseek-harness#readme",
+  "license": "MIT",
+  "maintainers": [
+    "imccyu <imccyu@gmail.com>",
+    "tianyicui-deepseek <tianyi@deepseek.com>"
+  ],
+  "repository": {
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "type": "git",
+    "directory": "packages/experimental/terminal-bundle"
+  },
+  "_source_registry_name": "default",
+  "_contentLength": 21921,
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dist": {
+    "shasum": "4c21f61f2082601ec2365551129ebdc5bbbcb8a3",
+    "tarball": "https://registry.npmmirror.com/@deepseek-ai/dsh-experimental-terminal-bundle/-/dsh-experimental-terminal-bundle-0.2.1-alpha.2.tgz",
+    "fileCount": 11,
+    "integrity": "sha512-csE9BygFZWrXZ5BQyduzI/9dzeIxEsVvzMP3WFSZAhLM/m7Ap1FLZzg87fc8lEEsAnUXHkpYOC4+Gi3ipST1RA==",
+    "signatures": [
+      {
+        "sig": "MEUCIEsTkhGikn2vng7jbDc6lV03fc0P2rPg+3v33br8s7VXAiEAtW2VQ84vi9TpeW3BUSLGKHyzK2FZ6fO09+MkBll9CCY=",
+        "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+      },
+      {
+        "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+        "sig": "MEYCIQDr/O0eyr6kHOESsDen74njGI6BCZ9t/aPM57RMXMSIIAIhAIDxRzyrETI9wnjfxT5cl3I0KP2XUcgPIzg3xvMIycLu"
+      }
+    ],
+    "unpackedSize": 10090,
+    "size": 4766
+  },
+  "icon": "./icon.svg",
+  "main": "lib/index.js",
+  "type": "module",
+  "_from": "file:/home/runner/work/deepseek-harness/deepseek-harness/dist/npm/deepseek-ai-dsh-experimental-terminal-bundle-0.2.1-alpha.2.tgz",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
+  },
+  "version": "0.2.1-alpha.2",
+  "_npmUser": "imccyu <imccyu@gmail.com>",
+  "_resolved": "/home/runner/work/deepseek-harness/deepseek-harness/dist/npm/deepseek-ai-dsh-experimental-terminal-bundle-0.2.1-alpha.2.tgz",
+  "_integrity": "sha512-csE9BygFZWrXZ5BQyduzI/9dzeIxEsVvzMP3WFSZAhLM/m7Ap1FLZzg87fc8lEEsAnUXHkpYOC4+Gi3ipST1RA==",
+  "_npmVersion": "11.19.0",
+  "directories": {},
+  "_nodeVersion": "24.21.0",
+  "dependencies": {
+    "@deepseek-ai/dsh-terminal": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-terminal-bash": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-tool-terminal": "0.2.1-alpha.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "_hasShrinkwrap": false,
+  "devDependencies": {
+    "@deepseek-ai/cordis": "~4.0.5-alpha.1"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.5-alpha.1"
+  },
+  "_npmOperationalInternal": {
+    "host": "s3://npm-registry-packages-npm-production",
+    "tmp": "tmp/dsh-experimental-terminal-bundle_0.2.1-alpha.2_1791533478047_0.7286676890651282"
+  },
+  "_cnpmcore_publish_time": "2026-10-09T08:11:18.139Z",
+  "publish_time": 1791533478139
+}
+

@@ -1,0 +1,339 @@
+# dsh-terminal-panel — 实现蓝图与接口契约
+
+> 本文件是并行开发的唯一契约。Host 引擎、客户端 UI、QA 都必须按这里的路径、接口与事件格式实现；有异议先改本文件并在聊天中说明。
+
+## 1. 目标（用户需求）
+
+1. 在 DSH Web GUI 中拉起可见的终端窗口（真实 PTY，可交互）。
+2. DSH agent 执行的终端命令显示在这个终端窗口里，实时输出（看到进度，而不是等后台结果）。
+3. DSH agent 能“截图”终端窗口当前内容（文本屏幕内容），并有一个工具把结果交给模型。
+4. 代码只放在 `C:\Users\LANCANG\Desktop\Code\DSH plugin`；不修改 `D:\DSH`。开发测试使用独立的 dev profile / dev host，不重启用户的 Desktop DSH。
+
+### 1.1 用户已确认的决定（2026-10-19）
+
+- 截图：**文本屏幕快照**（不做 PNG/图片给模型）。
+- 内置 shell 命令：**开启接管**（`interceptShellTools: true` 默认），前台 pwsh/bash 调用自动显示在终端面板里；保持工具/审批流程不变，但命令按用户终端权限执行（不套 DSH 沙箱）。可通过配置关闭。
+- 安装：开发完成后由 Lead 安装进 `~/.dsh/profiles/desktop`（Desktop profile），不改 `D:\DSH`；必要时让用户刷新页面/重启 DSH 生效。
+
+
+## 2. 运行环境与路径
+
+- DSH 版本：0.2.1-rc.2；Desktop GUI 当前 URL `http://127.0.0.1:58966`（不要动它）。
+- 插件仓库：`C:\Users\LANCANG\Desktop\Code\DSH plugin`（node/npm/pnpm 可用，网络可用）。
+- 插件包：`packages\dsh-terminal-panel`（`name: dsh-terminal-panel`，link 安装进 dev profile）。
+- dev profile：`C:\Users\LANCANG\.dsh\profiles\dev`（已安装本插件，package.json 的 `dsh.profile.bundles` 含 `dsh-terminal-panel`）。
+- dev host 启动命令（在仓库根目录执行；端口 3101）：
+  ```powershell
+  & "D:\DSH\resources\runtime\cli\bin\dsh.cmd" --profile dev --no-open --port 3101
+  ```
+  启动日志打印 `dsh web: http://127.0.0.1:3101/?token=...`。重启 host 才会重新加载 host 半侧与 client bundle（client-modules 在启动时快照）。
+- 打开 dev GUI 做 UI 验证：`node tools/verify-ui.mjs "<带 token 的 URL>"`（Playwright + 系统 Chrome；截图落在 `tools/artifacts`）。右侧栏快捷键：`Control+Shift+B`。
+- 官方 SDK 提取目录（只读参考）：`C:\Users\LANCANG\AppData\Local\Temp\dsh-sdk\pkg\`（dsh-tools、dsh-terminal、dsh-tool-terminal、dsh-api-terminal-controller、dsh-client-ui-sidebar-terminal、dsh-client-ui-sidebar-right、dsh-web-app、dsh-subprocess 等）。
+- 重要参考实现：
+  - `dsh-client-ui-sidebar-terminal`：client bundle 格式、`ctx.slots.inject` + `sidebar.right.pane.tab` 注册、xterm 用法。
+  - `dsh-tool-terminal`：`defineTool` 用法、`exec.agent`、`ctx.workingDirectory.ensure(agent, signal)`。
+  - `dsh-tool-pwsh-persistent`：PowerShell 持久 shell 的命令包装/标记解析（可复用思路）。
+  - `dsh-api-terminal-controller`：`ctx.subprocess.spawnTerminal` 调用方式、headless xterm + serialize 屏幕快照。
+  - 本仓库 `packages/dsh-terminal-panel/lib/client.js`：已验证可加载的 client 骨架（当前为占位 UI）。
+
+## 3. 插件包结构
+
+```
+packages/dsh-terminal-panel/
+  package.json          # 已存在；dsh.bundle.patch + dsh.client；dependencies: @xterm/headless, @xterm/addon-serialize
+  cordis.patch.yml      # 已存在；插入 host 行 name: dsh-terminal-panel
+  lib/
+    index.js            # host 入口（最终版；Cordis apply）
+    client.js           # 构建产物（勿手改；由 tools/build-client.mjs 生成）
+    host/
+      ansi.js           # stripAnsi / 纯文本工具
+      ring.js           # 有界输出尾缓冲（按 UTF-8 字节截断）
+      screen.js         # headless xterm 封装：write、visibleText、cursor、serialize、dispose
+      session.js        # TerminalPanelSession：PTY handle + screen + 订阅者 + 状态
+      registry.js       # 会话注册表：createEphemeral / ensureInteractive / lookup / close / prune
+      shell.js          # 解析 shell 可执行文件与 argv（Windows: pwsh.exe 优先，退回 powershell.exe；POSIX: bash）
+      intercept.js      # ctx.on('tools/execute') 拦截 pwsh/bash，把前台命令跑进可见 PTY
+      tools.js          # terminal_* 工具注册（JSON Schema 参数/输出，直接 ctx.tools.register）
+      routes.js         # HTTP 路由 + SSE
+      prompt.js         # ctx.systemPrompt.section 指南
+  client-src/           # 浏览器半侧源码（TSX）
+    index.tsx           # apply(ctx)、注册 locale / sidebar tab type / body slot / guide
+    Panel.tsx           # 面板：会话列表 + xterm 视图 + 控制按钮
+    styles.ts           # 注入 CSS 字符串
+  tests/                # node:test 单元测试（host 纯逻辑）
+tools/
+  build-client.mjs      # esbuild 构建 client-src → lib/client.js（ModuleLoader wrapper）
+  verify-ui.mjs         # 已有 e2e 冒烟脚本（可扩展）
+  dev-restart.ps1       # 便捷重启 dev host（可选）
+```
+
+## 4. Host 半侧设计
+
+### 4.1 Cordis 入口 `lib/index.js`
+
+```js
+export const name = 'dsh-terminal-panel'
+export const inject = ['tools'] // 必需；其余服务在 apply 中可选获取
+
+export function apply(ctx) {
+  // 1) 读取 ctx.get('subprocess') / ctx.get('workingDirectory') / ctx.get('webServer') / ctx.get('connection') / ctx.get('systemPrompt')
+  // 2) 初始化 registry（有 subprocess + workingDirectory 时）
+  // 3) 注册 HTTP 路由（webServer 存在时，经 ctx.inject(['webServer','connection'], ...)）
+  // 4) 注册 terminal_* 工具（tools 存在时）
+  // 5) 注册 tools/execute 拦截（interceptShellTools 开启时）
+  // 6) systemPrompt.section（存在时）
+}
+```
+
+- 不能假设 `@deepseek-ai/*` 包可 import（插件不在 DSH 包树内）。必须用 `ctx.get(...)`、`ctx.inject(...)`、`ctx.on(...)`、`ctx.tools.register(...)` 等运行时服务。
+- headless xterm 用 `createRequire(import.meta.url)` 加载 `@xterm/headless` 与 `@xterm/addon-serialize`（CJS）。
+- 配置（cordis.patch.yml 的 `config`，apply 第二参数）字段：
+  - `interceptShellTools`（默认 `true`）：拦截前台 pwsh/bash 调用
+  - `shellPath`：交互 shell 可执行路径覆盖（默认自动探测）
+  - `scrollback`（默认 2000）
+  - `maxOutputBytes`（默认 262144）
+  - `maxSessions`（默认 16）
+  - `commandTimeoutMs`（默认 180000）：拦截命令的默认超时
+  - `retainExited`（默认 10）：保留多少个已退出的命令会话用于回看
+
+### 4.2 PTY 会话（`session.js`）
+
+用 `ctx.subprocess.spawnTerminal(request)` 创建；请求形如：
+
+```js
+const handle = await subprocess.spawnTerminal({
+  argv: [shellPath, ...args],      // 交互 shell：pwsh -NoLogo；命令：pwsh -NoLogo -Command <command>
+  cwd,
+  cols, rows,
+  terminalType: 'xterm-256color',
+  env: { DSH_SESSION_ID: sessionId }, // 可选
+  shellActivity: false,
+  graceMs: 1000,
+  signal,
+})
+```
+
+`handle` 关键接口（已在 `dsh-api-terminal-controller/lib/index.js` 验证）：
+- `handle.output`：AsyncIterable<Uint8Array>
+- `handle.done`：Promise<{ exitCode, signal? }>
+- `handle.write(data)` / `handle.resize(cols, rows)` / `handle.terminate()`（幂等，等进程树结束）
+- `handle.inspectActivity()`（可选，不用）
+
+会话职责：
+- 单 writer：所有对 screen/状态/广播的修改串行（promise 队列）。
+- UTF-8 `TextDecoder` 流式解码（`{ stream: true }`），EOF 时 flush；保留末尾 4KB 原样以避免跨块字符问题（参考 controller 的写完再广播顺序）。
+- 每个 chunk 顺序：写入 headless xterm（`screen.write(data, cb)`）→ 追加 ring → 生成 `seq+1` 广播 `output` 帧。
+- 状态：`running` → `exited`（exitCode）或 `failed`（error message）。进程结束后 flush 输出、广播 `state`，SSE 最终帧。
+- `snapshot()`：`{ screen: serializer.serialize(), text: visibleText(), cursor: {x,y}, info }`。
+  - `visibleText()`：`buffer.active` 的 0..rows-1 行 `translateToString(true)`，逐行右裁剪，去掉尾部全空行，行间 `\n`。
+- 标题：`kind: 'command'|'interactive'`；命令会话标题 = 截断后的命令首行（≤80 字符）；交互会话默认 `PowerShell` / `终端`。
+- 会话保留：命令会话退出后保留（最多 `retainExited` 个，超出关闭并移除）；交互会话不自动移除。
+
+### 4.3 会话注册表（`registry.js`）
+
+- `createCommandSession({ command, cwd, cols, rows, timeoutMs, sessionId, agentId })`：spawn `shell -NoLogo -Command <command>`（命令字符串原样传入 argv，不经 shell 解释；PowerShell 的 `-Command` 接受整串）。
+- `createInteractive({ cwd, cols, rows, sessionId, agentId, title })`：spawn 交互 shell。
+- `ensureAgentTerminal(agent)`：每个 agent 一个默认交互终端（用于 `terminal_run/send/read`），按 `agentId` 复用。
+- `runInExisting(session, command, { timeoutMs, signal })`：交互 shell 的标记包装执行：
+  - 产生随机 nonce；wrapper 采用 `dsh-tool-pwsh-persistent` 的写法：
+    `Write-Output '<START>'; $LASTEXITCODE=$null; $__s=1; try { Invoke-Expression "<escaped>"; $__ok=$? } catch { $__ok=$false }; if ($null -ne $LASTEXITCODE) { $__s=[int]$LASTEXITCODE } else { $__s = if ($__ok) {0} else {1} }; Write-Output ('<END>'+$__s)`
+  - `quoteForPwsh`：反引号转义（\`、"、$），\r 删除，\n → \`n，ESC → \`e；单行写入并回车。
+  - 解析：在会话的 **纯文本滚动缓冲**（ANSI 已剥离）中轮询（25ms）找 `END`+数字；取最后一个 `START` 到 `END` 之间文本，去掉 wrapper 回显；返回 `{ output, exitCode }`。
+  - 超时：默认 `commandTimeoutMs`；超时后 `handle.terminate()` 并标记会话失效，返回已捕获部分输出 + `timedOut: true`（下次 `ensureAgentTerminal` 重新创建）。
+  - 取消（exec.signal abort）：terminate 会话，返回 `aborted`。
+- 事件订阅：`subscribe(id, listener)` 返回 disposer；SSE 使用。
+- 关闭：`close(id)` → terminate + 移除 + 广播。
+
+### 4.4 HTTP 路由（`routes.js`，都走 `ctx.connection.admit(req)` 鉴权）
+
+所有路径前缀 `/dsh-terminal-panel`。
+
+| 方法 | 路径 | 请求 | 响应 |
+|---|---|---|---|
+| GET | `/sessions` | — | `{ sessions: SessionInfo[] }`（含已退出保留会话） |
+| GET | `/snapshot?id=` | — | `{ info, screen /*ANSI*/, text /*可见屏文本*/, cursor }` |
+| GET | `/events?id=` | — | SSE：`snapshot` / `output` / `state` / `exit` 事件；20s 心跳注释 |
+| GET | `/events` | — | SSE：全局 `sessions` 事件（会话新增/状态变化时） |
+| POST | `/create` | `{ cols?, rows?, title?, sessionId? }` | `{ session }` |
+| POST | `/input` | `{ id, data }` | `{ ok: true }`（data 为原始 UTF-8，含控制字符；大写上限 64KB） |
+| POST | `/resize` | `{ id, cols, rows }` | `{ ok: true }` |
+| POST | `/close` | `{ id }` | `{ ok: true }` |
+
+- JSON 请求/响应；错误统一 `{ error: string }` + 4xx/5xx。
+- `admit` 失败：401（未认证）/403（不信任），直接 `res.end`。
+- SSE：`Content-Type: text/event-stream`、`Cache-Control: no-cache`、`Connection: keep-alive`；每个事件 `event: <name>\ndata: <json>\n\n`；正常关闭/超时/`req.close` 时清理订阅。
+- 请求体解析：手写有界读取（≤1MB），不要引入框架。
+
+`SessionInfo` 形状（client/host 共用）：
+```ts
+type SessionInfo = {
+  id: string
+  title: string
+  kind: 'command' | 'interactive'
+  owner: 'agent' | 'user'
+  sessionId?: string
+  agentId?: string
+  command?: string
+  cwd: string
+  cols: number
+  rows: number
+  state: 'running' | 'exited' | 'failed'
+  exitCode: number | null
+  error?: string
+  createdAt: number
+  updatedAt: number
+}
+```
+
+### 4.5 工具（`tools.js`）
+
+直接 `ctx.tools.register({ name, description, parameters: <JSON Schema>, output: { schema: <JSON Schema>, render(args, value) }, async execute(args, exec), presentCall? })`。
+注意：`parameters` 必须是 **JSON Schema 对象**（`{ type: 'object', properties: {...}, required: [...], additionalProperties: false }`），不要再写 DSL。
+`exec.agent` 是拥有者 Agent；`exec.signal` 是取消信号；`exec.agent.session?.id` 可作 sessionId。
+返回工具的模型可见文本由 `output.render` 生成；`value` 必须严格符合 `output.schema`（运行时校验，失败会变成工具错误）。
+
+工具清单：
+
+1. `terminal_run`
+   - 参数：`command`（string，必填）、`description`（string，可写可不写，仅展示）、`wait`（boolean，默认 true）、`timeoutMs`（number，默认 `commandTimeoutMs`）
+   - 行为：agent 默认交互终端里执行命令；输出实时进面板；`wait:true` 等待完成返回输出；`wait:false` 立即返回（后台运行，后续用 `terminal_read`/`terminal_screenshot` 查看）
+   - value：`{ terminalId, output, exitCode: number|null, timedOut: boolean, aborted: boolean, stillRunning: boolean }`
+   - render：文本 = `output`，追加 `\n[exit code: N]`（非 0）或 `[still running]` 等标记；保留最近若干行有界输出
+2. `terminal_screenshot`
+   - 参数：`terminalId`（string，可选；缺省用 agent 默认终端）、`withScrollback`（boolean，默认 false）
+   - value：`{ terminalId, title, state, cols, rows, cursor: {x,y}, text: string, ansi?: string }`
+   - render：`text` 前加一行 `[terminal <title> <cols>x<rows> cursor (x,y) state]`；这是模型看到的“截图”
+3. `terminal_send`：`{ terminalId?, text (必填), submit? (默认 true) }` → `{ ok, terminalId }`（写入原始文本；submit 时追加 `\r`）
+4. `terminal_read`：`{ terminalId?, maxBytes? }` → `{ terminalId, state, text }`（最近输出尾部；无 ANSI）
+5. `terminal_list`：`{}` → `{ terminals: SessionInfo[] }`
+6. `terminal_open`：`{ title?, cwd? }` → `{ terminalId, info }`（创建新的可见交互会话）
+7. `terminal_close`：`{ terminalId }` → `{ ok: true }`
+
+工具指南（`prompt.js`）：`ctx.systemPrompt.section({ name: 'tool:terminal-panel', order: <TOOL_PTY 附近>, text })`，说明：命令会自动显示在“终端面板”；需要看当前屏幕用 `terminal_screenshot`；需要交互/长任务用 `terminal_open/terminal_run/terminal_send`；`terminal_screenshot` 适合 TUI/全屏程序。
+
+### 4.6 默认 shell 工具拦截（`intercept.js`）
+
+```js
+ctx.on('tools/execute', async (exec, next) => {
+  if (!config.interceptShellTools) return next()
+  if (exec.name !== 'pwsh' && exec.name !== 'bash') return next()
+  const args = exec.arguments ?? {}
+  // 有 sandbox 升权或后台运行参数时交给原实现，保持审批/沙箱/后台语义不变
+  if (args.run_in_background === true || args.sandbox_permissions !== undefined) return next()
+  const command = typeof args.command === 'string' ? args.command : undefined
+  if (!command) return next()
+  try {
+    const value = await runVisibleCommand({ command, workdir: args.workdir, timeoutMs: args.timeoutMs, agent: exec.agent, signal: exec.signal })
+    return { value }   // 成功路径返回 value，registry 会按内置工具的 output.schema 校验 + render
+  } catch (error) {
+    return next()      // 运行失败回退原实现（或返回 isError？优先回退，保证正确性）
+  }
+})
+```
+
+`runVisibleCommand` 构造与内置 pwsh 工具一致的 value（必要时按 `exec.name` 区分，Windows 只需要 pwsh）：
+```js
+{
+  kind: 'foreground',
+  cwd,                       // 解析后的工作目录
+  exitCode,                  // number | null
+  signal: null,              // 我们主动 terminate 时填信号名（如 'SIGTERM'）
+  timedOut,                  // boolean
+  aborted,                   // boolean
+  timeoutMs,                 // 本次生效超时
+  stdout: { text: mergedOutput, truncated: false },  // PTY 合并 stdout/stderr
+  stderr: { text: '', truncated: false },
+}
+```
+- 输出文本：ANSI 剥离、解码后合并；保留尾部 `maxOutputBytes`，超出时在头部加裁剪说明（参考内置工具）。
+- 超时：默认用 `args.timeoutMs ?? 内置 shell 默认（60s）`？为贴近原行为，取 `args.timeoutMs ?? 120000`（可配置）。超时 terminate 并返回 `timedOut: true, exitCode: null`。
+- 取消 `exec.signal`：terminate，返回 `aborted: true`。
+- 每次拦截创建 `kind: 'command'` 会话，标题=命令首行；agent 命令应在面板中实时可见。
+- 若 `exec.agent` 缺失或会话创建失败（例如 subprocess 服务不可用），回退 `next()`。
+
+> 失败回退会让该条命令按原样在后台执行，但不会破坏 agent 行为；这是安全网。
+
+## 5. 客户端半侧（`client-src/`）
+
+### 5.1 注册（`index.tsx`）
+
+已验证可用的模式（参考 `packages/dsh-terminal-panel/lib/client.js` 当前骨架、官方 `dsh-client-ui-sidebar-terminal`）：
+
+```ts
+export const inject = ['slots', 'locale', 'sidebarRight', 'sidebarRightTabs']
+
+export function apply(ctx) {
+  // locale.register(namespace, { zh, en })
+  // sidebarRightTabs.register({ id, kind: 'terminal-panel', multiple: true, priority: 'extension', title, guide: [{ id:'open', order, title, description, icon: <primitives.PluginArtworkTerminal> }] })
+  // ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({ name:'sidebar.right.pane.tab', key:id, locale: namespace, inject: (sessionId) => ({ sessionId }) }, Panel)))
+}
+```
+- 面板 body 组件收到 props：`useTabInfo`、`t`（locale）、自定义 `inject` 返回值、`sessionId`。
+- `useTabInfo()` 返回 `{ sidebar, panel, tab }`；从 tab 拿不到 terminal id 时用内部状态（面板内自己管理会话选择，按 `sessionId`/全局列表）。
+- 客户端可用的共享模块（platform 基座）：`react`、`react-dom`、`react/jsx-runtime`、`@deepseek-ai/dsh-client-store`、`@deepseek-ai/dsh-client-ui-primitives`、`@deepseek-ai/dsh-client-ui-slots`、`@deepseek-ai/dsh-client-ui-dockkit`、`zod`、`@tanstack/react-virtual`。其他 import 必须打包进 bundle（xterm 等）。
+
+### 5.2 面板 UI（`Panel.tsx`）
+
+- 获取会话：`GET /dsh-terminal-panel/sessions`；订阅 `GET /dsh-terminal-panel/events` 全局 SSE 更新列表。
+- 顶部工具栏：`+ 新建终端`（POST /create）、刷新、关闭当前会话；当前会话标题/状态。
+- 会话列表：左侧或顶部标签（命令会话显示命令首行、交互会话显示标题；running 状态小圆点；已退出显示退出码；可关闭）。
+- 终端视图：`@xterm/xterm` + `@xterm/addon-fit`；挂载时打开 SSE `/events?id=`，先渲染 `snapshot.screen`（ANSI）再追加 `output.chunk`；按容器尺寸 `fit()` 并 POST resize；用户键盘输入 → POST `/input`（原始字符串，包含 `\r`）。
+- 主题：跟随 DSH 主题变量（尽量读取 `getComputedStyle(document.documentElement)` 的 `--dsw-*` 背景/前景色；不要求完美）。
+- 截图按钮：把 xterm 可见屏文本复制到剪贴板（navigator.clipboard）并提示；也给 agent 的截图工具提供同样内容（host 端计算）。
+- 错误态：连接失败显示重试；空态显示“新建终端”按钮。
+- 语言：中文为主，`locale` 注册 zh/en。
+
+### 5.3 构建（`tools/build-client.mjs`）
+
+- 输入 `packages/dsh-terminal-panel/client-src/index.tsx`；esbuild bundle（format=cjs，platform=browser，jsx=automatic，loader: {'.css':'text'}）。
+- externals：`react`、`react-dom`、`react/jsx-runtime`、`react-dom/client`、`@deepseek-ai/dsh-client-ui-primitives`、`@deepseek-ai/dsh-client-store`、`@deepseek-ai/dsh-client-ui-slots`、`@deepseek-ai/dsh-client-ui-dockkit`、`zod`、`@tanstack/react-virtual`。
+- 把 CSS 文本注入：在 `apply()` 里创建 `<style data-plugin="dsh-terminal-panel">`（幂等）。
+- 产物包装：
+  ```js
+  window.__ModuleLoader__.load({
+    id: "dsh-terminal-panel",
+    factory: (require) => {
+      var module = { exports: {} }; var exports = module.exports;
+      /* esbuild CJS 代码 */
+      return module.exports;
+    },
+  });
+  ```
+- 输出 `packages/dsh-terminal-panel/lib/client.js`；写完打印大小。
+- 根 `package.json` scripts：`"build": "node tools/build-client.mjs"`。
+- 构建后必须重启 dev host 才能在浏览器看到新 bundle。
+
+## 6. 测试与验收
+
+### 6.1 单元测试（host 纯逻辑，node:test）
+- `ansi.js`：剥离 SGR/OSC/光标序列。
+- `ring.js`：字节上限、UTF-8 边界裁剪。
+- wrapper 生成/解析：给定模拟纯文本流（含回显、两段命令输出、结束标记），正确提取输出与退出码。
+- value 映射：pwsh foreground value 形状与 schema 匹配（可用内置工具 schema 校验思路）。
+
+### 6.2 e2e（`tools/verify-ui.mjs` / QA 扩展）
+- 打开 dev GUI（token URL）→ 关闭预览弹窗 → 打开会话 → `Control+Shift+B` 打开右侧栏 → 点“终端面板”guide → 面板 body 出现。
+- 面板内新建终端 → xterm 出现 → 输入 `Write-Output 'hello'` 回车 → 屏幕出现 hello。
+- agent 工具验证（通过 HTTP 直接调用工具不可行；用真实会话让 agent 触发 `terminal_screenshot`，或在 dev host 里用测试 agent；至少验证：拦截 pwsh 调用后面板出现命令会话与输出）。
+- 截图工具返回的 `text` 包含屏幕内容（TUI 场景可后续测）。
+
+### 6.3 验收门槛
+- dev host 启动无插件报错；`GET /dsh-terminal-panel/sessions` 带 cookie 返回 200；client bundle 加载无 console error。
+- 面板可开、可输入、可 resize、可关；SSE 实时输出。
+- 拦截生效：一次 `pwsh` 调用在面板出现实时输出，工具结果正常（agent 不报错）。
+- `terminal_screenshot` 返回当前屏幕文本。
+- 安装到 desktop profile 后同样工作（由 Lead 在确认后执行；不要在测试中重启用户的 Desktop DSH）。
+
+## 7. 并行分工与写作用域（避免冲突）
+
+| 角色 | 负责文件 | 不要动 |
+|---|---|---|
+| host-engine | `packages/dsh-terminal-panel/lib/index.js`、`lib/host/**`、`packages/dsh-terminal-panel/tests/**` | `client-src/**`、`lib/client.js`、`tools/build-client.mjs`、根 `package.json`、`research/**`、`docs/**` |
+| client-ui | `packages/dsh-terminal-panel/client-src/**`、`tools/build-client.mjs`、`tools/verify-ui.mjs` | `lib/index.js`、`lib/host/**`、`lib/client.js`（只由构建脚本写）、根 `package.json`、`docs/**` |
+| qa-verifier | `qa/**`、`tools/**`（新增测试脚本）、`docs/test-report.md` | 上述两者的源码；不改实现文件，只报告 bug |
+| Lead | `package.json`、`package.json`/profile 安装、`docs/**`、集成修复、桌面安装与最终验收 | — |
+
+开发期约定：
+- 重启 dev host 前先 `job_kill` 旧的（Lead 管理 3101 端口；其他成员需要时使用 3103+ 端口自测并先说明）。
+- 每次改动 client 需 `node tools/build-client.mjs` 后重启 dev host。
+- 文本文件一律用 `write`/`edit` 工具写 UTF-8（不要用 PowerShell `Set-Content` 改中文文本）。

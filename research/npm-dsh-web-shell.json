@@ -1,0 +1,138 @@
+﻿{
+  "_id": "dsh-web-shell@0.1.1",
+  "_rev": "6059561-6a8065f75d87649b71326c0c",
+  "dist-tags": {
+    "latest": "0.1.1"
+  },
+  "name": "dsh-web-shell",
+  "time": {
+    "created": "2026-08-15T13:13:27.762Z",
+    "modified": "2026-08-15T14:41:44.069Z",
+    "0.1.0": "2026-08-15T13:13:14.233Z",
+    "0.1.1": "2026-08-15T14:41:34.025Z"
+  },
+  "versions": [
+    "0.1.0",
+    "0.1.1"
+  ],
+  "bugs": {
+    "url": "https://github.com/JesmonX/dsh-web-shell/issues"
+  },
+  "description": "Collapsible web terminal for DeepSeek Harness: a right-docked xterm.js shell (bash/zsh) over a WebSocket PTY bridge.",
+  "homepage": "https://github.com/JesmonX/dsh-web-shell#readme",
+  "license": "MIT",
+  "maintainers": [
+    "2h3ngy4n <2h3ngy4n@zju.edu.cn>"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JesmonX/dsh-web-shell.git"
+  },
+  "_source_registry_name": "default",
+  "_contentLength": 5296,
+  "version": "0.1.1",
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ],
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.host.json && tsc -b tsconfig.client.json && tsdown --env.DSH_BUILD_FACE client",
+    "bundle": "tsdown",
+    "watch": "tsdown --watch",
+    "typecheck": "tsc -b tsconfig.host.json tsconfig.client.json"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-settings": ">=0.1.0-rc.5 <0.2.0",
+    "@deepseek-ai/schemastery": "^3.18.1",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "ws": "^8.21.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.1 <5",
+    "@deepseek-ai/dsh-client-ui-settings": ">=0.1.0-rc.5 <0.2.0",
+    "@deepseek-ai/dsh-client-runtime": ">=0.1.0-rc.5 <0.2.0",
+    "@deepseek-ai/dsh-client-ui-layout": ">=0.1.0-rc.5 <0.2.0",
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.1.0-rc.5 <0.2.0",
+    "@deepseek-ai/dsh-host-webserver": ">=0.1.0-rc.5 <0.2.0",
+    "@deepseek-ai/dsh-invariants": ">=0.1.0-rc.5 <0.2.0",
+    "@deepseek-ai/dsh-subprocess": ">=0.1.0-rc.5 <0.2.0",
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.1 <5",
+    "@deepseek-ai/dsh-client-ui-settings": ">=0.1.0-rc.5 <0.2.0",
+    "@deepseek-ai/dsh-client-runtime": ">=0.1.0-rc.5 <0.2.0",
+    "@deepseek-ai/dsh-client-ui-layout": ">=0.1.0-rc.5 <0.2.0",
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.1.0-rc.5 <0.2.0",
+    "@deepseek-ai/dsh-host-webserver": ">=0.1.0-rc.5 <0.2.0",
+    "@deepseek-ai/dsh-invariants": ">=0.1.0-rc.5 <0.2.0",
+    "@deepseek-ai/dsh-subprocess": ">=0.1.0-rc.5 <0.2.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "~18.3.1",
+    "@types/ws": "^8.18.1",
+    "lightningcss": "1.32.0",
+    "react": "^18.2.0",
+    "tsdown": "0.22.2",
+    "typescript": "6.0.3"
+  },
+  "gitHead": "97f9ce4dc3c4c836bab0b8c30afed10a1160b520",
+  "_nodeVersion": "24.14.0",
+  "_npmVersion": "11.9.0",
+  "dist": {
+    "integrity": "sha512-X+bvhuU+mCKX9hdv+JU7Vp04QB4sFeJUGgtRwk5g1j7AypZMrx3CWqqNu4g7JmbfoRyJPF93IhxG0KtnoUje3g==",
+    "shasum": "a3acb6a9d9221992389131a957374c9d6aab53ce",
+    "tarball": "https://registry.npmmirror.com/dsh-web-shell/-/dsh-web-shell-0.1.1.tgz",
+    "fileCount": 15,
+    "unpackedSize": 739435,
+    "signatures": [
+      {
+        "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+        "sig": "MEUCIDC4cvXRvYhRa8hGX8BotWpvLa9xJRnh9VrIyVO/pUpCAiEAkvN+hXOh/e5AhrDBWMTP/s+E7Wt/PAfL5gLhN4UBLgs="
+      }
+    ],
+    "size": 156268
+  },
+  "_npmUser": "2h3ngy4n <2h3ngy4n@zju.edu.cn>",
+  "directories": {},
+  "_npmOperationalInternal": {
+    "host": "s3://npm-registry-packages-npm-production",
+    "tmp": "tmp/dsh-web-shell_0.1.1_1786804893884_0.6708435413349265"
+  },
+  "_hasShrinkwrap": false,
+  "_cnpmcore_publish_time": "2026-08-15T14:41:34.025Z",
+  "publish_time": 1786804894025
+}

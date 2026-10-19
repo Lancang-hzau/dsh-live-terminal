@@ -1,0 +1,133 @@
+﻿{
+  "_id": "dsh-screenshot-capture@0.2.4",
+  "_rev": "6136391-6aa00f6f0d309714c1b7dbfe",
+  "dist-tags": {
+    "latest": "0.2.4"
+  },
+  "name": "dsh-screenshot-capture",
+  "time": {
+    "created": "2026-09-08T13:36:47.938Z",
+    "modified": "2026-10-02T02:31:10.614Z",
+    "0.2.0": "2026-09-08T13:36:29.196Z",
+    "0.2.2": "2026-09-29T07:58:04.058Z",
+    "0.2.3": "2026-09-29T08:18:27.750Z",
+    "0.2.4": "2026-10-02T02:30:56.117Z"
+  },
+  "versions": [
+    "0.2.0",
+    "0.2.2",
+    "0.2.3",
+    "0.2.4"
+  ],
+  "author": "wangzhanchao883",
+  "bugs": {
+    "url": "https://github.com/wangzhanchao883/dsh-screenshot-capture/issues"
+  },
+  "description": "Point-and-shoot screenshot capture for DeepSeek Harness: clipboard watcher + system floating window (comment & key-point, copy/save-doc/save-image) + zero-config OCR through the host's own multimodal model (Tongyi Qianwen fallback) + Obsidian per-day merg",
+  "homepage": "https://github.com/wangzhanchao883/dsh-screenshot-capture",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "plugin",
+    "screenshot",
+    "screenshot-capture",
+    "clipboard",
+    "ocr",
+    "multimodal",
+    "vlm",
+    "obsidian",
+    "windows",
+    "winforms",
+    "productivity",
+    "automation"
+  ],
+  "license": "MIT",
+  "maintainers": [
+    "wangzhanchao883 <39116898@qq.com>"
+  ],
+  "repository": {
+    "url": "git+https://github.com/wangzhanchao883/dsh-screenshot-capture.git",
+    "type": "git"
+  },
+  "_source_registry_name": "default",
+  "_contentLength": 9357,
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ],
+      "platform": "web"
+    }
+  },
+  "dist": {
+    "shasum": "28dfa5be88baaf75c14239a5e443fba5e6f13eee",
+    "tarball": "https://registry.npmmirror.com/dsh-screenshot-capture/-/dsh-screenshot-capture-0.2.4.tgz",
+    "fileCount": 15,
+    "integrity": "sha512-QT/Sk5rfnlGBGfOq3J3r2lzNp31hQutfgWjsKdAdLeIoLgpILPEqF0REgFUS/4UuEjQVt2bZQSenSVjWgINB0w==",
+    "signatures": [
+      {
+        "sig": "MEUCIBClnA8wt+UoUTXiT3Ohh60/rM6+oVJwvhg6YglIMoc/AiEA4QsIVbExZe/IncqOEQy3lxJQFgUDMj6c10Y2ed6OBZc=",
+        "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+      },
+      {
+        "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+        "sig": "MEYCIQCLt79I6fGdS571lATIPNo0TQ6RYNY1LsdKCHWQt4XMRwIhALNZFm/1duqFgjwko49X9pREu4dhtaT7RFRUHEyJw7fD"
+      }
+    ],
+    "attestations": {
+      "url": "https://registry.npmjs.org/-/npm/v1/attestations/dsh-screenshot-capture@0.2.4",
+      "provenance": {
+        "predicateType": "https://slsa.dev/provenance/v1"
+      }
+    },
+    "unpackedSize": 89811,
+    "size": 32851
+  },
+  "main": "index.mjs",
+  "type": "module",
+  "engines": {
+    "node": "^22.0.0 || >=24"
+  },
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "gitHead": "13eb3d395fc2506effdd05167f111e2bce0ab4d0",
+  "scripts": {
+    "dev": "node dev-run.mjs",
+    "test": "node test/test-format.mjs && node test/test-storage.mjs",
+    "dev:auto": "node dev-run.mjs --auto doc",
+    "test:ocr": "node test/test-ocr.mjs"
+  },
+  "version": "0.2.4",
+  "_npmUser": "GitHub Actions <npm-oidc-no-reply@github.com>",
+  "_npmVersion": "12.2.0",
+  "directories": {},
+  "_nodeVersion": "24.21.0",
+  "dependencies": {},
+  "_hasShrinkwrap": false,
+  "devDependencies": {
+    "@deepseek-ai/schemastery": "^3.18.4"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-tools": ">=0.0.1-rc.1 <0.1.0 || >=0.1.0-rc.1 <0.2.0-0 || >=0.2.0-rc.1 <0.3.0-0",
+    "@deepseek-ai/schemastery": ">=3.18.0 <4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/schemastery": {
+      "optional": true
+    }
+  },
+  "_npmOperationalInternal": {
+    "host": "s3://npm-registry-packages-npm-production",
+    "tmp": "tmp/dsh-screenshot-capture_0.2.4_1790908256034_0.43266647752260967"
+  },
+  "_cnpmcore_publish_time": "2026-10-02T02:30:56.117Z",
+  "publish_time": 1790908256117
+}

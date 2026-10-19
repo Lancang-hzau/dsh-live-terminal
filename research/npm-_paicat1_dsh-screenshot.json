@@ -1,0 +1,98 @@
+﻿{
+  "_id": "@paicat1/dsh-screenshot@1.2.0",
+  "_rev": "6077908-6a871f5e4170b22efb4589c5",
+  "dist-tags": {
+    "latest": "1.2.0"
+  },
+  "name": "@paicat1/dsh-screenshot",
+  "time": {
+    "created": "2026-08-20T15:38:06.162Z",
+    "modified": "2026-09-08T14:12:52.439Z",
+    "1.0.1": "2026-08-20T15:37:35.977Z",
+    "1.0.0": "2026-08-17T11:01:16.060Z",
+    "1.0.2": "2026-08-27T13:15:29.663Z",
+    "1.0.3": "2026-08-27T14:08:46.295Z",
+    "1.0.4": "2026-08-27T16:05:58.312Z",
+    "1.0.5": "2026-08-29T01:41:52.246Z",
+    "1.1.0": "2026-08-30T13:33:03.817Z",
+    "1.1.1": "2026-08-30T14:55:04.039Z",
+    "1.1.2": "2026-08-30T14:58:19.102Z",
+    "1.2.0": "2026-09-08T14:12:37.637Z"
+  },
+  "versions": [
+    "1.0.0",
+    "1.0.1",
+    "1.0.2",
+    "1.0.3",
+    "1.0.4",
+    "1.0.5",
+    "1.1.0",
+    "1.1.1",
+    "1.1.2",
+    "1.2.0"
+  ],
+  "bugs": {
+    "url": "https://github.com/paicat1/dsh-screenshot/issues"
+  },
+  "description": "Standalone screen capture for DeepSeek Harness (dsh): browser hotkeys plus an agent-facing capture+read tool. Forked out of @liustack/modlens#48 (upstream declined the feature).",
+  "homepage": "https://github.com/paicat1/dsh-screenshot#readme",
+  "license": "MIT",
+  "maintainers": [
+    "paicat1 <573148556@qq.com>"
+  ],
+  "repository": {
+    "url": "git+https://github.com/paicat1/dsh-screenshot.git",
+    "type": "git"
+  },
+  "_source_registry_name": "default",
+  "_contentLength": 8143,
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [],
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "dist": {
+    "shasum": "dce9c196549f1e26bad9a1533ad847d459aa16b7",
+    "tarball": "https://registry.npmmirror.com/@paicat1/dsh-screenshot/-/dsh-screenshot-1.2.0.tgz",
+    "fileCount": 11,
+    "integrity": "sha512-OAJVpLZPzhCfNmGazz+zchUbDVNcbtjfn2GV3E05RakwaWv29JC7hhIIM6XxJnd0+dcqcwnpyFVT//etwDTiPw==",
+    "signatures": [
+      {
+        "sig": "MEQCIBBT27gOkumaMwRERGoxg8L0UOzA6gViI8AKtzXUkyEzAiAyK6ypGbZT3YtE9rVuJjbBeqqU0x/kKUFLEy4xua7X5A==",
+        "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+      },
+      {
+        "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+        "sig": "MEUCIQDYpf9giyJRmeNQ9hUgAcGJ13xjXPTcwCm/w279WV9ovQIgIwce2iOr/IHiQ8tLDyeMak7dvJwsKgqtRUHNoitbYsQ="
+      }
+    ],
+    "unpackedSize": 9687326,
+    "size": 9561406
+  },
+  "main": "dsh/index.js",
+  "type": "module",
+  "exports": {
+    ".": "./dsh/index.js",
+    "./dsh": "./dsh/index.js",
+    "./client": "./dsh/client.js",
+    "./package.json": "./package.json"
+  },
+  "gitHead": "cfc83f68dd5892fbe77dce2e29d6dfec4836ab28",
+  "version": "1.2.0",
+  "_npmUser": "paicat1 <573148556@qq.com>",
+  "_npmVersion": "10.9.2",
+  "directories": {},
+  "_nodeVersion": "22.14.0",
+  "_hasShrinkwrap": false,
+  "_npmOperationalInternal": {
+    "host": "s3://npm-registry-packages-npm-production",
+    "tmp": "tmp/dsh-screenshot_1.2.0_1788876757410_0.24093817494064207"
+  },
+  "_cnpmcore_publish_time": "2026-09-08T14:12:37.637Z",
+  "publish_time": 1788876757637
+}

@@ -1,0 +1,129 @@
+﻿{
+  "_id": "dsh-bash-terminal@0.3.15",
+  "_rev": "6053466-6a7dfd03188fec06e6e1701f",
+  "dist-tags": {
+    "latest": "0.3.15"
+  },
+  "name": "dsh-bash-terminal",
+  "time": {
+    "created": "2026-08-13T17:21:07.005Z",
+    "modified": "2026-09-11T06:21:37.379Z",
+    "0.2.3": "2026-08-13T17:20:59.508Z",
+    "0.3.11": "2026-08-14T00:39:00.665Z",
+    "0.3.14": "2026-08-14T07:35:05.812Z",
+    "0.3.15": "2026-09-11T06:21:26.140Z"
+  },
+  "versions": [
+    "0.2.3",
+    "0.3.11",
+    "0.3.14",
+    "0.3.15"
+  ],
+  "author": "MAXeaglet",
+  "bugs": {
+    "url": "https://github.com/MAXeaglet/dsh-bash-terminal/issues"
+  },
+  "description": "DSH plugin: one shell tool that runs commands through PowerShell, Git Bash, or WSL on Windows, with a user-chosen default terminal in the Web UI settings.",
+  "homepage": "https://github.com/MAXeaglet/dsh-bash-terminal#readme",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "plugin",
+    "terminal",
+    "shell",
+    "powershell",
+    "git-bash",
+    "wsl",
+    "windows"
+  ],
+  "license": "MIT",
+  "maintainers": [
+    "maxeagle <max-eagle@foxmail.com>"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MAXeaglet/dsh-bash-terminal.git"
+  },
+  "_source_registry_name": "default",
+  "_contentLength": 8684,
+  "version": "0.3.15",
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build:client": "node scripts/build-client.mjs",
+    "test": "node test/unit.mjs && node test/apply.mjs && node test/client.mjs && node test/terminal.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-api-remotes"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@deepseek-ai/dsh-tools": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-settings": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-llm": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-shell": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-sandbox": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-timeout": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-client-store": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-client-locale": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-client-ui-settings": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-client-ui-primitives": "^0.1.5-rc.1",
+    "react": "^18.2.0"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.1",
+    "node-pty": "^1.1.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  },
+  "gitHead": "1b339c277fefaae18794623a07c051c3fc76fd5b",
+  "_nodeVersion": "24.16.0",
+  "_npmVersion": "11.13.0",
+  "dist": {
+    "integrity": "sha512-coj5LFI+DirQCrMuZV3me/A9MMfN9YBD2bLhUl+eX0EUYyMVP/GiR4ENabjTs3UfXFuoW7Bmx88/CDkYtBeySQ==",
+    "shasum": "2724a7604c970ea5667ce0048d7a3c1dbef26b86",
+    "tarball": "https://registry.npmmirror.com/dsh-bash-terminal/-/dsh-bash-terminal-0.3.15.tgz",
+    "fileCount": 12,
+    "unpackedSize": 93401,
+    "signatures": [
+      {
+        "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+        "sig": "MEUCIQCXM2iW0cslMA+Jlrht2LQyfgU94B35ftv5vzDtEHZ37wIgGA86s9hbpbWG6ObRv6Wlv5qCXFPg5LvB6IvUhba6EqI="
+      }
+    ],
+    "size": 26990
+  },
+  "_npmUser": "maxeagle <max-eagle@foxmail.com>",
+  "directories": {},
+  "_npmOperationalInternal": {
+    "host": "s3://npm-registry-packages-npm-production",
+    "tmp": "tmp/dsh-bash-terminal_0.3.15_1789107685974_0.6985569475382578"
+  },
+  "_hasShrinkwrap": false,
+  "_cnpmcore_publish_time": "2026-09-11T06:21:26.140Z",
+  "publish_time": 1789107686140
+}

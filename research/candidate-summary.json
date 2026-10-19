@@ -1,0 +1,189 @@
+﻿[
+    {
+        "name":  "@deepseek-ai/dsh-client-ui-sidebar-terminal",
+        "version":  "0.1.6-alpha.1",
+        "modified":  "2026-10-17T08:35:07.407Z",
+        "license":  "MIT",
+        "unpackedKB":  713,
+        "repo":  "https://github.com/deepseek-ai/deepseek-harness",
+        "deps":  "",
+        "peerDsh":  null,
+        "enginesDsh":  null
+    },
+    {
+        "name":  "@deepseek-ai/dsh-experimental-terminal-bundle",
+        "version":  "0.2.1-alpha.2",
+        "modified":  "2026-10-17T08:28:50.778Z",
+        "license":  "MIT",
+        "unpackedKB":  10,
+        "repo":  "https://github.com/deepseek-ai/deepseek-harness",
+        "deps":  "@deepseek-ai/dsh-terminal, @deepseek-ai/dsh-terminal-bash, @deepseek-ai/dsh-tool-terminal",
+        "peerDsh":  null,
+        "enginesDsh":  null
+    },
+    {
+        "name":  "@hyzyn/dsh-tty",
+        "version":  "0.32.3",
+        "modified":  "2026-10-17T16:27:50.008Z",
+        "license":  "Apache-2.0",
+        "unpackedKB":  2809,
+        "repo":  "https://github.com/hyzyn/dsh-plugin-kit",
+        "deps":  "ws, ssh2, @hyzyn/dsh-kit, @xterm/headless, @deepseek-ai/schemastery",
+        "peerDsh":  "^0.1.7-rc.2 || ^0.2.0-rc.1 || ^0.2.0-rc.2 || ^0.2.1-alpha.1 || ^0.2.1-alpha.2 || ^0.2.1-alpha.5 || ^0.2.1-rc.1",
+        "enginesDsh":  "\u003e=0.1.7-rc.2"
+    },
+    {
+        "name":  "dsh-terminal-button",
+        "version":  "0.4.3",
+        "modified":  "2026-10-19T06:43:46.652Z",
+        "license":  "MIT",
+        "unpackedKB":  63,
+        "repo":  "https://github.com/whiteS18/dsh-terminal-button",
+        "deps":  "@deepseek-ai/schemastery",
+        "peerDsh":  null,
+        "enginesDsh":  null
+    },
+    {
+        "name":  "dsh-bash-terminal-ts",
+        "version":  "0.8.2",
+        "modified":  "2026-10-18T12:35:17.117Z",
+        "license":  "MIT",
+        "unpackedKB":  2217,
+        "repo":  "https://github.com/drscrewdriver/dsh-bash-terminal-ts",
+        "deps":  "ws, node-pty, @xterm/xterm, @xterm/addon-fit, @deepseek-ai/schemastery",
+        "peerDsh":  null,
+        "enginesDsh":  null
+    },
+    {
+        "name":  "dsh-cool-terminal",
+        "version":  "0.4.2",
+        "modified":  "2026-10-16T06:00:48.605Z",
+        "license":  "MIT",
+        "unpackedKB":  847,
+        "repo":  "https://github.com/CoolTea001/dsh-cool-terminal",
+        "deps":  "",
+        "peerDsh":  null,
+        "enginesDsh":  null
+    },
+    {
+        "name":  "dsh-plugin-terminal",
+        "version":  "0.2.0",
+        "modified":  "2026-08-19T06:57:50.034Z",
+        "license":  "MIT",
+        "unpackedKB":  453,
+        "repo":  "https://github.com/siberiah2o/dsh-plugin-terminal",
+        "deps":  "@xterm/addon-fit, @xterm/addon-web-links, @xterm/xterm, node-pty, ws",
+        "peerDsh":  null,
+        "enginesDsh":  null
+    },
+    {
+        "name":  "dsh-terminal",
+        "version":  "0.1.1",
+        "modified":  "2026-08-15T05:19:37.432Z",
+        "license":  "MIT",
+        "unpackedKB":  875,
+        "repo":  "https://github.com/giiiiiithub/terminal",
+        "deps":  "node-pty",
+        "peerDsh":  null,
+        "enginesDsh":  null
+    },
+    {
+        "name":  "dsh-web-shell",
+        "version":  "0.1.1",
+        "modified":  "2026-08-15T14:41:44.069Z",
+        "license":  "MIT",
+        "unpackedKB":  722,
+        "repo":  "https://github.com/JesmonX/dsh-web-shell",
+        "deps":  "@deepseek-ai/dsh-settings, @deepseek-ai/schemastery, @xterm/addon-fit, @xterm/xterm, ws",
+        "peerDsh":  null,
+        "enginesDsh":  null
+    },
+    {
+        "name":  "@easytz/dsh-terminal-panel",
+        "version":  "0.2.7",
+        "modified":  "2026-09-06T10:32:12.146Z",
+        "license":  "MIT",
+        "unpackedKB":  189,
+        "repo":  "https://github.com/EasyTZ/dsh-terminal-panel",
+        "deps":  "",
+        "peerDsh":  null,
+        "enginesDsh":  null
+    },
+    {
+        "name":  "dsh-zterm",
+        "version":  "0.1.13",
+        "modified":  "2026-10-15T06:19:44.823Z",
+        "license":  "MIT",
+        "unpackedKB":  1033,
+        "repo":  "https://github.com/guhanfei-ai/dsh-zterm",
+        "deps":  "ssh2, @xterm/xterm, @xterm/addon-fit, @sinclair/typebox, @xterm/addon-search, @deepseek-ai/schemastery",
+        "peerDsh":  null,
+        "enginesDsh":  null
+    },
+    {
+        "name":  "dsh-terminal-manager",
+        "version":  "0.1.1",
+        "modified":  "2026-09-13T16:06:04.858Z",
+        "license":  "MIT",
+        "unpackedKB":  2351,
+        "repo":  "https://gitcode.com/pengpengR/dsh-terminal-manager",
+        "deps":  "ssh2, ws",
+        "peerDsh":  null,
+        "enginesDsh":  null
+    },
+    {
+        "name":  "@paicat1/dsh-screenshot",
+        "version":  "1.2.0",
+        "modified":  "2026-09-08T14:12:52.439Z",
+        "license":  "MIT",
+        "unpackedKB":  9460,
+        "repo":  "https://github.com/paicat1/dsh-screenshot",
+        "deps":  "",
+        "peerDsh":  null,
+        "enginesDsh":  null
+    },
+    {
+        "name":  "dsh-screenshot-feedback-hook-mcp",
+        "version":  "0.2.1",
+        "modified":  "2026-08-28T12:00:33.464Z",
+        "license":  "MIT",
+        "unpackedKB":  212,
+        "repo":  "https://github.com/lkh081231/screenshot-feedback-hook-mcp",
+        "deps":  "@deepseek-ai/schemastery",
+        "peerDsh":  null,
+        "enginesDsh":  null
+    },
+    {
+        "name":  "dsh-screenshot-capture",
+        "version":  "0.2.4",
+        "modified":  "2026-10-02T02:31:10.614Z",
+        "license":  "MIT",
+        "unpackedKB":  88,
+        "repo":  "https://github.com/wangzhanchao883/dsh-screenshot-capture",
+        "deps":  "",
+        "peerDsh":  null,
+        "enginesDsh":  null
+    },
+    {
+        "name":  "dsh-gitbash-shell",
+        "version":  "0.42.1",
+        "modified":  "2026-10-18T17:33:05.358Z",
+        "license":  "MIT",
+        "unpackedKB":  1111,
+        "repo":  "https://github.com/KannaKuron/dsh-gitbash-shell",
+        "deps":  "",
+        "peerDsh":  "\u003e=0.1.7-rc",
+        "enginesDsh":  null
+    },
+    {
+        "name":  "dsh-tweaks-git-bash-terminal-tool",
+        "version":  "0.5.1",
+        "modified":  "2026-10-17T15:07:24.379Z",
+        "license":  "MIT",
+        "unpackedKB":  342,
+        "repo":  "https://github.com/converk/dsh-tweaks",
+        "deps":  "@deepseek-ai/schemastery",
+        "peerDsh":  null,
+        "enginesDsh":  null
+    }
+]

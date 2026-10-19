@@ -1,0 +1,131 @@
+﻿{
+  "_id": "dsh-terminal@0.1.1",
+  "_rev": "6058396-6a7fe5c7d6774f32138a5c38",
+  "dist-tags": {
+    "latest": "0.1.1"
+  },
+  "name": "dsh-terminal",
+  "time": {
+    "created": "2026-08-15T04:06:31.376Z",
+    "modified": "2026-08-15T05:19:37.432Z",
+    "0.1.0": "2026-08-15T04:06:12.422Z",
+    "0.1.1": "2026-08-15T05:19:24.568Z"
+  },
+  "versions": [
+    "0.1.0",
+    "0.1.1"
+  ],
+  "author": "giiiiiithub",
+  "bugs": {
+    "url": "https://github.com/giiiiiithub/terminal/issues"
+  },
+  "description": "Terminal panel for the DSH Web UI: a real PTY shell (cmd.exe by default on Windows) rendered in the browser with xterm.js. Host half spawns shells with node-pty; client half is a browser plugin.",
+  "homepage": "https://github.com/giiiiiithub/terminal#readme",
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "deepseek harness",
+    "plugin",
+    "terminal",
+    "pty",
+    "xterm",
+    "web ui"
+  ],
+  "license": "MIT",
+  "maintainers": [
+    "ff-jcg <giiiiiithub@gmail.com>"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/giiiiiithub/terminal.git"
+  },
+  "_source_registry_name": "default",
+  "_contentLength": 11875,
+  "version": "0.1.1",
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module",
+  "main": "lib/index.mjs",
+  "exports": {
+    ".": {
+      "default": "./lib/index.mjs"
+    },
+    "./typert": {
+      "default": "./lib/typert.mjs"
+    },
+    "./remote": {
+      "default": "./lib/remote.mjs"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ],
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "dependencies": {
+    "node-pty": "^1.1.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-typert-protocol": "^0.1.0-rc.6"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "~18.3.1",
+    "@xterm/addon-fit": "^0.11.0",
+    "node-pty": "^1.1.0",
+    "react": "^18.2.0",
+    "tsdown": "^0.22.14",
+    "typescript": "^5.9.0",
+    "zod": "^4.4.3",
+    "@xterm/xterm": "^6.0.0"
+  },
+  "scripts": {
+    "bundle": "node scripts/gen-xterm-css.mjs && tsdown && node scripts/wrap-client.mjs",
+    "watch": "tsdown --watch",
+    "prepublishOnly": "npm run bundle"
+  },
+  "gitHead": "c6d0fbfc45f6fc5ccfb4a60c4a1d400ebd177e24",
+  "_nodeVersion": "24.14.0",
+  "_npmVersion": "11.9.0",
+  "dist": {
+    "integrity": "sha512-by9Lif/brkyvcaWJbZTOD9YeOU/PCXToVxm/QVzNA/xc8nQ1uYYtVDft7Necc3H3SWfkZkncJYYK/kPU+K9U6Q==",
+    "shasum": "d7fe0037264484686f24beb27f313982eefb01e0",
+    "tarball": "https://registry.npmmirror.com/dsh-terminal/-/dsh-terminal-0.1.1.tgz",
+    "fileCount": 9,
+    "unpackedSize": 896108,
+    "signatures": [
+      {
+        "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+        "sig": "MEQCIEN0B9DeJtsSUoJMpHdbYQFIZFXTZpNoYbbe4bLX9QSJAiBv0TC9rRmdC0j5bX5nWA2kgjER3AaZswjHf2WwydMs1A=="
+      }
+    ],
+    "size": 186638
+  },
+  "_npmUser": "ff-jcg <giiiiiithub@gmail.com>",
+  "directories": {},
+  "_npmOperationalInternal": {
+    "host": "s3://npm-registry-packages-npm-production",
+    "tmp": "tmp/dsh-terminal_0.1.1_1786771164410_0.3220779181358211"
+  },
+  "_hasShrinkwrap": false,
+  "_cnpmcore_publish_time": "2026-08-15T05:19:24.568Z",
+  "publish_time": 1786771164568
+}

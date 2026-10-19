@@ -1,0 +1,122 @@
+﻿{
+  "_id": "dsh-terminal-button@0.4.3",
+  "_rev": "6198167-6aba17bbd986c936ea72de10",
+  "dist-tags": {
+    "latest": "0.4.3"
+  },
+  "name": "dsh-terminal-button",
+  "time": {
+    "created": "2026-09-28T07:31:07.826Z",
+    "modified": "2026-10-19T06:43:46.652Z",
+    "0.3.2": "2026-09-28T07:30:53.646Z",
+    "0.3.3": "2026-09-28T09:33:08.421Z",
+    "0.3.4": "2026-09-28T17:57:19.577Z",
+    "0.3.6": "2026-09-30T09:02:58.902Z",
+    "0.3.7": "2026-10-08T11:48:43.074Z",
+    "0.3.8": "2026-10-19T04:09:55.577Z",
+    "0.4.1": "2026-10-19T05:44:45.472Z",
+    "0.4.3": "2026-10-19T06:43:31.585Z"
+  },
+  "versions": [
+    "0.3.2",
+    "0.3.3",
+    "0.3.4",
+    "0.3.6",
+    "0.3.7",
+    "0.3.8",
+    "0.4.1",
+    "0.4.3"
+  ],
+  "bugs": {
+    "url": "https://github.com/whiteS18/dsh-terminal-button/issues"
+  },
+  "description": "Extension for DeepSeek Harness's official terminal: renders it in an in-app bottom panel, redirects Desktop \"open terminal\" entry points into that panel, and exposes the dsh CLI inside terminals. No second PTY/xterm stack.",
+  "homepage": "https://github.com/whiteS18/dsh-terminal-button#readme",
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "plugin",
+    "terminal",
+    "bottom-panel",
+    "extension",
+    "cordis"
+  ],
+  "license": "MIT",
+  "maintainers": [
+    "cwsong <1055490448@qq.com>"
+  ],
+  "repository": {
+    "url": "git+https://github.com/whiteS18/dsh-terminal-button.git",
+    "type": "git"
+  },
+  "_source_registry_name": "default",
+  "_contentLength": 8779,
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-api-terminal-controller",
+        "@deepseek-ai/dsh-client-ui-sidebar-terminal"
+      ],
+      "platform": "web"
+    }
+  },
+  "dist": {
+    "shasum": "6f81601e15133168a244a8ba61c869d3ca16a1be",
+    "tarball": "https://registry.npmmirror.com/dsh-terminal-button/-/dsh-terminal-button-0.4.3.tgz",
+    "fileCount": 7,
+    "integrity": "sha512-odQd6o45RjE4qDuXDpW1DxadPo9NoO2usON9Fs2WLpidErkqDkNPTOmwiyV8cyQBfOcm9oN9ORtPLjBj+5FFSw==",
+    "signatures": [
+      {
+        "sig": "MEUCIEVZ6wM3LwcHCtgDYIIamtHR/zUCCBRyhwpy4nRQb3dUAiEA7CJ6G61vJlWzF9CE1qTb5t6z1+6e8N0twUDWTI7k4hI=",
+        "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+      },
+      {
+        "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+        "sig": "MEUCIFsEvBB5rxgPE+QDCXwhtC0AkYWSPZBqLmICeeiQ4KYkAiEA9Wus6Ih9YUmLR2Dv8ira46Y+9EOIAhwI28Z1kJ7UaiY="
+      }
+    ],
+    "unpackedSize": 64626,
+    "size": 22100
+  },
+  "main": "index.js",
+  "type": "module",
+  "engines": {
+    "node": ">=22.19"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "gitHead": "6742d907e53bb8bc0cfa14afdbab68b9be9d8a75",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "build": "node build.mjs"
+  },
+  "version": "0.4.3",
+  "_npmUser": "cwsong <1055490448@qq.com>",
+  "_npmVersion": "10.8.2",
+  "directories": {},
+  "_nodeVersion": "20.18.1",
+  "dependencies": {
+    "@deepseek-ai/schemastery": "~3.18.4"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "_hasShrinkwrap": false,
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  },
+  "_npmOperationalInternal": {
+    "host": "s3://npm-registry-packages-npm-production",
+    "tmp": "tmp/dsh-terminal-button_0.4.3_1792392211476_0.8672571855752726"
+  },
+  "_cnpmcore_publish_time": "2026-10-19T06:43:31.585Z",
+  "publish_time": 1792392211585
+}

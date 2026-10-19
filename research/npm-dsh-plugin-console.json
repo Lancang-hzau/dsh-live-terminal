@@ -1,0 +1,194 @@
+﻿{
+  "_id": "dsh-plugin-console@0.3.2",
+  "_rev": "6065467-6a82c53c7d55faaf17feebee",
+  "dist-tags": {
+    "latest": "0.3.2"
+  },
+  "name": "dsh-plugin-console",
+  "time": {
+    "created": "2026-08-17T08:24:28.848Z",
+    "modified": "2026-08-24T07:58:45.842Z",
+    "0.1.0": "2026-08-17T08:24:20.313Z",
+    "0.2.0": "2026-08-19T02:27:06.015Z",
+    "0.2.1": "2026-08-20T08:15:58.066Z",
+    "0.2.2": "2026-08-20T08:37:53.373Z",
+    "0.3.0": "2026-08-20T10:05:42.523Z",
+    "0.3.1": "2026-08-23T05:41:57.445Z",
+    "0.3.2": "2026-08-24T07:58:33.799Z"
+  },
+  "versions": [
+    "0.1.0",
+    "0.2.0",
+    "0.2.1",
+    "0.2.2",
+    "0.3.0",
+    "0.3.1",
+    "0.3.2"
+  ],
+  "author": "AlexYin-Tongji",
+  "bugs": {
+    "url": "https://github.com/AlexYin-Tongji/dsh-plugin-console/issues"
+  },
+  "description": "DSH Plugin Console: a verified community catalog, profile manager, and Harness updater for DeepSeek Harness",
+  "homepage": "https://github.com/AlexYin-Tongji/dsh-plugin-console#readme",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "plugin-manager",
+    "plugin-console",
+    "plugin-store",
+    "cordis"
+  ],
+  "license": "MIT",
+  "maintainers": [
+    "cococc <xiaoal4399@gmail.com>"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AlexYin-Tongji/dsh-plugin-console.git"
+  },
+  "_source_registry_name": "default",
+  "_contentLength": 11768,
+  "version": "0.3.2",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0",
+    "pnpm": ">=10"
+  },
+  "packageManager": "pnpm@11.22.0",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": "./lib/client.js",
+    "./types": {
+      "types": "./lib/types.d.ts",
+      "default": "./lib/types.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-settings-plugins",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "release:verify": "pnpm run typecheck && pnpm run build && pnpm run test",
+    "check": "pnpm run release:verify",
+    "prepack": "pnpm run release:verify",
+    "watch": "tsdown --watch"
+  },
+  "dependencies": {
+    "semver": "^7.7.2",
+    "yaml": "^2.8.1"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.0.1",
+    "@deepseek-ai/cordis-plugin-loader": "1.0.2",
+    "@deepseek-ai/dsh-app-boot": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-locale": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-runtime": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-settings": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-settings-plugins": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-slots": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-home-paths": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-host-webserver": "0.1.0-rc.6",
+    "@deepseek-ai/schemastery": "3.18.1",
+    "react": ">=18.2.0 <20.0.0",
+    "@deepseek-ai/dsh-client-ui-sidebar": "0.1.0-rc.6"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/",
+    "provenance": true
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/cordis-plugin-group": "^1.0.1",
+    "@deepseek-ai/cordis-plugin-include": "^1.0.6",
+    "@deepseek-ai/cordis-plugin-loader": "^1.0.2",
+    "@deepseek-ai/dsh-app-boot": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-locale": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-primitives": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-settings": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-settings-plugins": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-home-paths": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-host-webserver": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-invariants": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-launch-environment": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-system-prompt": "^0.1.0-rc.6",
+    "@deepseek-ai/schemastery": "^3.18.1",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "~18.3.1",
+    "@types/react-dom": "~18.3.1",
+    "@types/semver": "^7.7.1",
+    "jsdom": "^27.0.0",
+    "lightningcss": "^1.30.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
+    "rehype-raw": "^7.0.0",
+    "rehype-sanitize": "^6.0.0",
+    "remark-gfm": "^4.0.1",
+    "tsdown": "^0.15.12",
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0",
+    "@deepseek-ai/dsh-client-ui-sidebar": "^0.1.0-rc.6"
+  },
+  "gitHead": "224e53959c1b03f83993b80f8438b49b17d820d6",
+  "_nodeVersion": "24.19.0",
+  "_npmVersion": "11.17.0",
+  "dist": {
+    "integrity": "sha512-3fiIBQaWngUw/lq98nWRPwxUsVsk+rWfuxY+jN77pqQCa+cPfVo4vztvihkqC/AMpjArIL/LRsI1FKtzuDBmtQ==",
+    "shasum": "f049056abc3f2153e73e0a2fc11e0e2349d22478",
+    "tarball": "https://registry.npmmirror.com/dsh-plugin-console/-/dsh-plugin-console-0.3.2.tgz",
+    "fileCount": 15,
+    "unpackedSize": 3227120,
+    "attestations": {
+      "url": "https://registry.npmjs.org/-/npm/v1/attestations/dsh-plugin-console@0.3.2",
+      "provenance": {
+        "predicateType": "https://slsa.dev/provenance/v1"
+      }
+    },
+    "signatures": [
+      {
+        "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+        "sig": "MEQCIBd2wvVu9SLD/Z9xMVRNOex+py6ahi+QJqJkvZ4tB5Z3AiBESjdv6zJ2hWTXryoNA0KKyJKUlaLJFR6uAIPqjKibvA=="
+      }
+    ],
+    "size": 686503
+  },
+  "_npmUser": "cococc <xiaoal4399@gmail.com>",
+  "directories": {},
+  "_npmOperationalInternal": {
+    "host": "s3://npm-registry-packages-npm-production",
+    "tmp": "tmp/dsh-plugin-console_0.3.2_1787558313604_0.587158481849843"
+  },
+  "_hasShrinkwrap": false,
+  "_cnpmcore_publish_time": "2026-08-24T07:58:33.799Z",
+  "publish_time": 1787558313799
+}
