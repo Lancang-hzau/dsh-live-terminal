@@ -315,7 +315,17 @@ test('waitForCommandSession times out by terminating the PTY and returning parti
     const { handle } = subprocess.spawned[0]
     handle.push('partial line\r\n')
     await waitFor(() => session.snapshot().text.includes('partial line'))
-    const result = await registry.waitForCommandSession(session, { timeoutMs: 120, signal: undefined })
+    // `waitForExit` unrefs its timeout timer on purpose (a pending command wait
+    // must not keep the Host alive). Node 22's test runner treats an event loop
+    // holding only unref'd timers as drained and cancels the pending test, so
+    // hold the loop with a ref'd timer for the duration of this wait.
+    const keepAlive = setTimeout(() => {}, 2_000)
+    let result
+    try {
+      result = await registry.waitForCommandSession(session, { timeoutMs: 120, signal: undefined })
+    } finally {
+      clearTimeout(keepAlive)
+    }
     assert.equal(result.timedOut, true)
     assert.equal(result.exitCode, null)
     assert.equal(result.signal, 'SIGTERM')
