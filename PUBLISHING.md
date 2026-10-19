@@ -13,18 +13,18 @@
 
 ---
 
-## 0. 当前状态（2026-10-19）
+## 0. 当前状态（2026-10-19 更新）
 
-- ✅ npm 包名 `dsh-live-terminal` 已归账号 `lancang`（最终版本 **1.0.1**）
-- ✅ `npm pack` / tarball 安装到全新 DSH profile 启动验证通过（host 路由 + client UI）
+- ✅ **`dsh-live-terminal@1.0.0` 已正式发布到 npmjs**（latest；`https://www.npmjs.com/package/dsh-live-terminal`）
+- ✅ 用全新 DSH profile 从 npmjs 安装 `dsh-live-terminal@1.0.0` 并启动验证通过（host 路由 + client UI）
 - ✅ 单测 116/116、独立 e2e 44 PASS、Desktop 实机验证通过
 - ✅ `screenshots.json`、`icon.svg`、`README.md`、CI workflow、catalog 条目样例已就绪
-- ✅ `dsh-live-terminal@1.0.1` 已提交到 npm **staged queue**（stage id `42e272a2-4d53-43ac-aded-151ace82a3bd`，状态 `staged`）
-- ⬜ **等待 2FA 批准**：npm 新包必须由维护者用 2FA approve 后才会真正发布（见 §2.1）
+- ⚠️ 早期为绕过 npm 审核卡住状态额外 staged 了 `1.0.1`（stage id `42e272a2-4d53-43ac-aded-151ace82a3bd`，状态 `staged`）——**不需要它**，建议在 npm 网页 Staged Packages 里点 **Reject**；仓库版本已回退为 `1.0.0`。
+- ⚠️ npm 上保留着 `0.0.0-stage` 占位版本（staged publishing 机制产物），不影响安装；可稍后在网页删除。
 - ⬜ **GitHub 仓库尚不存在**（`https://github.com/Lancang-hzau/dsh-live-terminal` 目前 404）
 - ⬜ **catalog PR 未提交**（catalog 要求仓库存在且创建满 1 天）
 
-> 注：1.0.0 第一次用旧 npm CLI 直接 `npm publish` 时，npm 已自动创建 `0.0.0-stage` 占位版本并把 1.0.0 提交进审核队列，但旧 CLI 不展示 staged 信息，导致 1.0.0 卡住无法再次 stage（E409）。因此改用 1.0.1 走标准 staged 流程；`0.0.0-stage` 是占位版本，正式版发布后可在 npm 网页删除/忽略。
+> 注：npm 2026-10 起新包首版走 staged publishing——发布进入队列后需要维护者 2FA 批准。本项目 1.0.0 已通过该流程正式上线；下面的 §2.1 保留给以后新包的 staged 发布参考。
 
 ---
 
@@ -88,29 +88,38 @@ npm publish --registry=https://registry.npmjs.org --access public
 - 2FA 账号会提示 OTP，可加 `--otp 123456`。
 - `prepack` 钩子会先跑 `node tools/build-client.mjs`，保证 npm tarball 里的 `lib/client.js` 来自最新源码。
 
-### 2.1 首次发布：批准 staged 版本（需要 2FA）
+### 2.1 首次发布：staged 版本与 2FA 批准（参考流程，1.0.0 已完成）
 
-npm 2026-10 起，**新包首版**必须先进入 staged queue，再由维护者 2FA 批准后才会公开。本仓库首版 `1.0.1` 已经 staged（stage id `42e272a2-4d53-43ac-aded-151ace82a3bd`，状态 `staged`）。批准方式二选一：
+npm 2026-10 起，**新包首版**必须先进入 staged queue，再由维护者 2FA 批准后才会公开。1.0.0 已经通过该流程正式发布；下面是以后新包/新版本的参考步骤。
 
-**方式 A：CLI（需要验证器 App 的 6 位 TOTP）**
+**Stage 新版本**（不需要 2FA）：
 
 ```powershell
-npx --yes npm@11.21.1 stage approve 42e272a2-4d53-43ac-aded-151ace82a3bd
+npx --yes npm@11.21.1 stage publish --registry=https://registry.npmjs.org --tag latest
+npx --yes npm@11.21.1 stage list dsh-live-terminal --registry=https://registry.npmjs.org
+# 等 status 从 validating 变为 staged
+```
+
+**方式 A：CLI 批准（需要验证器 App 的 6 位 TOTP）**
+
+```powershell
+npx --yes npm@11.21.1 stage approve <stage-id> --registry=https://registry.npmjs.org
 # 提示时输入验证器 App 的 6 位验证码
 ```
 
-**方式 B：网页（支持安全密钥/Passkey 2FA）**
+**方式 B：网页批准（支持安全密钥/Passkey 2FA，推荐）**
 
-打开 <https://www.npmjs.com/settings/lancang/staged>（或 npm 首页 → Staged Packages），找到 `dsh-live-terminal@1.0.1` → **Approve**，按提示完成 2FA。
+登录 <https://www.npmjs.com/> → 点右上角**头像** → **Staged Packages** → 找到版本 → **Approve** / **Reject**，按提示完成 2FA。
 
 批准成功后验证：
 
 ```powershell
-npm view dsh-live-terminal version --registry=https://registry.npmjs.org   # → 1.0.1
-# 或在网页 https://www.npmjs.com/package/dsh-live-terminal 看到 1.0.1
+npm view dsh-live-terminal version --registry=https://registry.npmjs.org
+# 或打开 https://www.npmjs.com/package/dsh-live-terminal
 ```
 
-> 注意：全局 npm 11.6.2 没有 `stage` 子命令，所以上面用 `npx npm@11.21.1`。后续发版可继续 `npm stage publish` + approve，或在已有包上用 `npm publish --otp=<code>`。
+> 注意：全局 npm 11.6.2 没有 `stage` 子命令，所以上面用 `npx npm@11.21.1`。已发布的包更新版本也可以直接用 `npm publish --otp=<code>`。
+> 如果 `stage approve` 报 404（带 granular token 的已知问题），改用上面的网页批准即可。
 
 ### 发布新版
 

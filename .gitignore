@@ -8,3 +8,7 @@ research/sources/
 .DS_Store
 Thumbs.db
 .devhost-*.log
+
+# npm 2FA recovery codes must never be committed
+npm_recovery_codes.txt
+*recovery_codes*
