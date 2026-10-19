@@ -1,6 +1,6 @@
 {
   "name": "dsh-live-terminal",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Visible terminal panel for DeepSeek Harness: stream agent shell commands into an in-app terminal live and let the agent take text screenshots of the terminal screen. DSH 可见终端面板：agent 命令实时显示 + 终端屏幕截图。",
   "type": "module",
   "license": "MIT",

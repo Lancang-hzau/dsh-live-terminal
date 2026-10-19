@@ -15,14 +15,16 @@
 
 ## 0. 当前状态（2026-10-19）
 
-- ✅ npm 包名 `dsh-live-terminal@1.0.0`（npmjs 上未被占用；**npm 名称先到先得，建议尽快发布占位**）
-- ✅ `npm pack` / `npm publish --dry-run` 通过：19 个文件、137 KB、目标 `https://registry.npmjs.org`
-- ✅ 从打包 tarball 安装到全新 DSH profile 并启动验证通过（host 路由 + client UI）
+- ✅ npm 包名 `dsh-live-terminal` 已归账号 `lancang`（最终版本 **1.0.1**）
+- ✅ `npm pack` / tarball 安装到全新 DSH profile 启动验证通过（host 路由 + client UI）
 - ✅ 单测 116/116、独立 e2e 44 PASS、Desktop 实机验证通过
 - ✅ `screenshots.json`、`icon.svg`、`README.md`、CI workflow、catalog 条目样例已就绪
-- ⬜ **npm 未发布**：本机 npm 未登录，且默认 registry 是 npmmirror 只读镜像
+- ✅ `dsh-live-terminal@1.0.1` 已提交到 npm **staged queue**（stage id `42e272a2-4d53-43ac-aded-151ace82a3bd`，状态 `staged`）
+- ⬜ **等待 2FA 批准**：npm 新包必须由维护者用 2FA approve 后才会真正发布（见 §2.1）
 - ⬜ **GitHub 仓库尚不存在**（`https://github.com/Lancang-hzau/dsh-live-terminal` 目前 404）
 - ⬜ **catalog PR 未提交**（catalog 要求仓库存在且创建满 1 天）
+
+> 注：1.0.0 第一次用旧 npm CLI 直接 `npm publish` 时，npm 已自动创建 `0.0.0-stage` 占位版本并把 1.0.0 提交进审核队列，但旧 CLI 不展示 staged 信息，导致 1.0.0 卡住无法再次 stage（E409）。因此改用 1.0.1 走标准 staged 流程；`0.0.0-stage` 是占位版本，正式版发布后可在 npm 网页删除/忽略。
 
 ---
 
@@ -85,7 +87,30 @@ npm publish --registry=https://registry.npmjs.org --access public
 - `package.json` 的 `publishConfig` 已指向 npmjs 且 `access: public`，但本机 `.npmrc` 是 npmmirror，**显式加 `--registry` 最稳妥**。
 - 2FA 账号会提示 OTP，可加 `--otp 123456`。
 - `prepack` 钩子会先跑 `node tools/build-client.mjs`，保证 npm tarball 里的 `lib/client.js` 来自最新源码。
-- 验证：`npm view dsh-live-terminal version --registry=https://registry.npmjs.org` → `1.0.0`。
+
+### 2.1 首次发布：批准 staged 版本（需要 2FA）
+
+npm 2026-10 起，**新包首版**必须先进入 staged queue，再由维护者 2FA 批准后才会公开。本仓库首版 `1.0.1` 已经 staged（stage id `42e272a2-4d53-43ac-aded-151ace82a3bd`，状态 `staged`）。批准方式二选一：
+
+**方式 A：CLI（需要验证器 App 的 6 位 TOTP）**
+
+```powershell
+npx --yes npm@11.21.1 stage approve 42e272a2-4d53-43ac-aded-151ace82a3bd
+# 提示时输入验证器 App 的 6 位验证码
+```
+
+**方式 B：网页（支持安全密钥/Passkey 2FA）**
+
+打开 <https://www.npmjs.com/settings/lancang/staged>（或 npm 首页 → Staged Packages），找到 `dsh-live-terminal@1.0.1` → **Approve**，按提示完成 2FA。
+
+批准成功后验证：
+
+```powershell
+npm view dsh-live-terminal version --registry=https://registry.npmjs.org   # → 1.0.1
+# 或在网页 https://www.npmjs.com/package/dsh-live-terminal 看到 1.0.1
+```
+
+> 注意：全局 npm 11.6.2 没有 `stage` 子命令，所以上面用 `npx npm@11.21.1`。后续发版可继续 `npm stage publish` + approve，或在已有包上用 `npm publish --otp=<code>`。
 
 ### 发布新版
 
@@ -100,7 +125,7 @@ catalog 不需要为新版本重复提 PR（版本/下载量由 catalog 的 nigh
 ### 可选：GitHub Release tarball
 
 ```powershell
-npm pack --registry=https://registry.npmjs.org   # dsh-live-terminal-1.0.0.tgz
+npm pack --registry=https://registry.npmjs.org   # dsh-live-terminal-1.0.1.tgz
 ```
 
 在 GitHub Releases 上传即可给不用 npm 的用户；本项目以 npm 为主，catalog 不必配置 `tarball` 字段。
@@ -173,9 +198,14 @@ dsh --profile web --no-open --port 3100
 ## 5. 常见问题
 
 - **npm publish 报 ENEEDAUTH**：没登录官方源 → `npm login --registry=https://registry.npmjs.org`。
-- **npm publish 报 E403 "Two-factor authentication or granular access token with bypass 2fa enabled is required"**：账号强制 2FA，web 登录 token 不能直接发布。任选其一：
-  1. 带 OTP 发布：`npm publish --registry=https://registry.npmjs.org --access public --otp=<6位验证码>`（验证器 App 里取）；
-  2. **Granular Access Token（推荐，后续免 OTP）**：<https://www.npmjs.com/settings/~/tokens> → Generate New Token → Granular Access Token → 权限 Read and write、Packages 选 All packages（首次发布新包需要）、勾选 **Bypass 2FA**；然后 `npm config set //registry.npmjs.org/:_authToken=<token>`，再发布。
+- **npm publish 报 E403 "Two-factor authentication or granular access token with bypass 2fa enabled is required"**：账号强制 2FA。新包首版不要用 `npm publish` 硬闯，走 staged 流程：
+  ```powershell
+  npx --yes npm@11.21.1 stage publish --registry=https://registry.npmjs.org --tag latest
+  npx --yes npm@11.21.1 stage list dsh-live-terminal      # 等待 status 从 validating 变成 staged
+  npx --yes npm@11.21.1 stage approve <stage-id>          # 输入 TOTP；或去 npmjs.com Staged Packages 网页批准
+  ```
+  已有包版本也可以用 `npm publish --otp=<6位验证码>` 直接发。不要用带 Bypass 2FA 的 granular token 直接发布（npm 正在限制）。
+- **npm publish 后只看到 `0.0.0-stage` 占位版本**：说明版本进了 staged queue，尚未被维护者 2FA 批准。用 `stage list` 找到条目并 approve；占位版本在正式版发布后可忽略或在网页删除。
 - **npm publish 报 402/403（非 2FA）**：包名被占用或权限不足。`dsh-live-terminal` 当前未占用；若之后被占，改用 `@scope/dsh-live-terminal`（需先在 npm 创建 scope/org），并同步改 `package.json.name`、`cordis.patch.yml` 的 row `name`、`tools/build-client.mjs` 的 `PLUGIN_ID`、README 与 catalog 文件名，然后重新构建。
 - **market 里搜不到**：没有 catalog PR 就一定搜不到（npm 发布不等于上架）；或 PR 未合并/站点还在构建；China 区域最多滞后 ~24h。
 - **市场安装被拒 / 兼容性红标**：catalog 读顶层 `engines.dsh`（本包为 `>=0.2.1-rc.2 <0.3.0-0`，对 0.2.1-rc.2 显示兼容）；市场安装 preflight 遇到不兼容包会直接 400。
