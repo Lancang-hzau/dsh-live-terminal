@@ -15,14 +15,14 @@
 
 ## 0. 当前状态（2026-10-19 更新）
 
-- ✅ **`dsh-live-terminal@1.0.0` 已正式发布到 npmjs**（latest；`https://www.npmjs.com/package/dsh-live-terminal`）
-- ✅ 用全新 DSH profile 从 npmjs 安装 `dsh-live-terminal@1.0.0` 并启动验证通过（host 路由 + client UI）
-- ✅ 单测 166/166（v1.1 本地）、独立 e2e 44 PASS（v1.0 验收）、Desktop 实机验证通过；v1.1 验证见 `docs/test-report.md` §12
-- ✅ **`v1.1.0` 已提交并打 tag `v1.1.0`（本地）**；发版以该 tag 为准，npm 发布步骤见 §2（尚未 push tag / 发布 npm）
+- ✅ **`dsh-live-terminal@1.1.0` 已正式发布到 npmjs（latest）**：<https://www.npmjs.com/package/dsh-live-terminal>（2026-10-19 22:07 +08:00；`1.0.0` 为历史版本）
+- ✅ 发布产物已校验：npm tarball 18 files、shasum `cc4295cb9d4971c074c93daf21ef90c465f7c883`，包内 `lib/client.js` sha256 与本地构建一致；1.0.0 时曾用全新 DSH profile 从 npmjs 安装并启动验证通过
+- ✅ 单测 166/166（v1.1 本地，Node 22/24 双版本验证）、独立 e2e 44 PASS（v1.0 验收）、Desktop 实机验证通过；v1.1 验证见 `docs/test-report.md` §12
+- ✅ **`v1.1.0` 已推送 GitHub**：release commit `58dc780`（annotated tag `v1.1.0` → `58dc780`）已 push 到 `origin/main`；其后的 `18fdfba` 仅为 Node 22 测试兼容修复（不进入 npm 包，不影响已发布产物）
 - ✅ `screenshots.json`、`icon.svg`、`README.md`、CI workflow、catalog 条目样例已就绪
-- ✅ **GitHub 仓库已建好并推送**：<https://github.com/Lancang-hzau/dsh-live-terminal>（public，tag `v1.0.0`；topics 已加 `dsh-plugin`/`dsh`/`deepseek-harness`/`cordis`/`terminal`/`pty`/`xterm`/`agent-tools`）
-- ✅ **GitHub Release `v1.0.0` 已创建**，附 npm tarball 资产：<https://github.com/Lancang-hzau/dsh-live-terminal/releases/tag/v1.0.0>（`tools/create-github-release.mjs` 可重复用于后续版本）
-- ✅ **CI 已绿**：`.github/workflows/ci.yml` 改为 `windows-latest` 后 run #3 success（host 单测断言 Windows 路径/argv 语义，Linux runner 会误报）
+- ✅ **GitHub 仓库已建好并推送**：<https://github.com/Lancang-hzau/dsh-live-terminal>（public；topics 已加 `dsh-plugin`/`dsh`/`deepseek-harness`/`cordis`/`terminal`/`pty`/`xterm`/`agent-tools`）
+- ✅ **GitHub Release `v1.1.0` 已创建**，附 npm tarball 资产：<https://github.com/Lancang-hzau/dsh-live-terminal/releases/tag/v1.1.0>（`v1.0.0` Release 见 <https://github.com/Lancang-hzau/dsh-live-terminal/releases/tag/v1.0.0>）
+- ✅ **CI 已绿**：run #7（commit `18fdfba`）三项全绿——`windows-latest` Node 22 + Node 24 全量（含 bundle freshness 门禁）、`ubuntu-latest` Node 24 平台无关子集；run #6 曾因 Node 22 test runner 的 unref-timer 行为失败，已由 `18fdfba` 修复
 - ✅ README 里引用的截图 raw URL 已验证可访问（200）；仓库无密钥/恢复码等敏感文件
 - ✅ **catalog PR 已准备好**：fork `Lancang-hzau/awesome-dsh-plugin` 已有分支 `add-dsh-live-terminal`（含 `data/plugins/Lancang-hzau__dsh-live-terminal.yml`）
 - ⏳ **catalog 仓库年龄门槛**：插件仓库创建于 `2026-10-19T11:35:41Z`，最早可提 PR 时间 **2026-10-20 19:35（Asia/Shanghai）**；到点运行 `node tools/open-catalog-pr.mjs --create` 即可（脚本会自动检查门槛并开 PR）

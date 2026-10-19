@@ -295,10 +295,12 @@ node tools/qa-e2e.mjs --slow --host-log=qa/artifacts/devhost-3105-final2.log "<t
 
 | 项 | v1.1 结果 |
 |---|---|
-| host 单元测试 | **166/166 PASS**（`npm test`，`tests/*.test.mjs`；133 v1.1 + apply 7 + routes 17 + tools 1 + 收尾 8） |
-| CI 门禁 | GitHub Actions：`windows-latest` Node 22/24 全量（`npm run build` → bundle freshness `git diff --exit-code -- lib/client.js` → `npm test` → `npm run typecheck`）；`ubuntu-latest` Node 24 跑平台无关子集（排除 `tests/registry.test.mjs`，其断言 Windows 路径语义）。166 为当前基线；ubuntu 子集首跑由 CI 验证 |
+| host 单元测试 | **166/166 PASS**（`npm test`，`tests/*.test.mjs`；133 v1.1 + apply 7 + routes 17 + tools 1 + 收尾 8），Node 24 与 Node 22.23.3 双版本验证 |
+| CI 门禁 | GitHub Actions run #7（commit `18fdfba`）**三项全绿**：`windows-latest` Node 22/24 全量（`npm run build` → bundle freshness `git diff --exit-code -- lib/client.js` → `npm test` → `npm run typecheck`）；`ubuntu-latest` Node 24 平台无关子集（排除 `tests/registry.test.mjs`，其断言 Windows 路径语义）。run #6 曾因 Node 22 test runner 把仅剩 unref 定时器的空循环判定为 drained 而失败，已由 `18fdfba` 测试侧修复（产物未变） |
 | TypeScript | `npm run typecheck` **0 error** |
-| 官方构建产物 | `lib/client.js` **396,637 B / gzip 101.5 KiB**（v1.1 收尾后；版本号构建期注入，bundle 内 `version:"1.1.0"`，构建确定性 sha 稳定 `03563DCB…`） |
+| 官方构建产物 | `lib/client.js` **396,630 B / gzip 101.5 KiB**（发布产物；版本号构建期注入，bundle 内 `version:"1.1.0"`，构建确定性 sha 稳定 `4B10F7F9…D844A5`） |
+| npm 发布 | `dsh-live-terminal@1.1.0` 已发布（latest）：npm tarball 18 files、shasum `cc4295cb9d4971c074c93daf21ef90c465f7c883`；从 registry 下载的包内 `lib/client.js` sha256 与本地构建一致 |
+| GitHub Release | `v1.1.0` Release 已创建并上传 npm tarball 资产（tag `v1.1.0` → `58dc780`） |
 | 真实 dev host e2e | **21 PASS / 0 FAIL / 1 SKIP**（收尾批次后复跑确认，client 报 `version:"1.1.0"`） |
 | mock e2e | **24 PASS / 0 FAIL / 1 SKIP**（收尾批次后复跑；此前 P0 轮曾 1 次首跑 resize 断言受 headless rAF 时序偶发影响，重跑不复现） |
 | v1.1 专项浏览器探针 | **15/15 PASS** |
