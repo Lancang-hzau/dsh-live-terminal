@@ -17,7 +17,8 @@
 
 - ✅ **`dsh-live-terminal@1.0.0` 已正式发布到 npmjs**（latest；`https://www.npmjs.com/package/dsh-live-terminal`）
 - ✅ 用全新 DSH profile 从 npmjs 安装 `dsh-live-terminal@1.0.0` 并启动验证通过（host 路由 + client UI）
-- ✅ 单测 158/158（v1.1 本地）、独立 e2e 44 PASS（v1.0 验收）、Desktop 实机验证通过；v1.1 验证见 `docs/test-report.md` §12
+- ✅ 单测 166/166（v1.1 本地）、独立 e2e 44 PASS（v1.0 验收）、Desktop 实机验证通过；v1.1 验证见 `docs/test-report.md` §12
+- ✅ **`v1.1.0` 已提交并打 tag `v1.1.0`（本地）**；发版以该 tag 为准，npm 发布步骤见 §2（尚未 push tag / 发布 npm）
 - ✅ `screenshots.json`、`icon.svg`、`README.md`、CI workflow、catalog 条目样例已就绪
 - ✅ **GitHub 仓库已建好并推送**：<https://github.com/Lancang-hzau/dsh-live-terminal>（public，tag `v1.0.0`；topics 已加 `dsh-plugin`/`dsh`/`deepseek-harness`/`cordis`/`terminal`/`pty`/`xterm`/`agent-tools`）
 - ✅ **GitHub Release `v1.0.0` 已创建**，附 npm tarball 资产：<https://github.com/Lancang-hzau/dsh-live-terminal/releases/tag/v1.0.0>（`tools/create-github-release.mjs` 可重复用于后续版本）
@@ -30,7 +31,7 @@
 
 > 注：npm 2026-10 起新包首版走 staged publishing——发布进入队列后需要维护者 2FA 批准。本项目 1.0.0 已通过该流程正式上线；下面的 §2.1 保留给以后新包的 staged 发布参考。
 >
-> CI 说明：host 单测断言 Windows 路径/argv 语义，因此 `.github/workflows/ci.yml` 使用 `windows-latest` 运行（不是 Linux），与本地 158/158 一致。
+> CI 说明：host 单测断言 Windows 路径/argv 语义，因此 `.github/workflows/ci.yml` 使用 `windows-latest` 运行（不是 Linux），与本地 166/166 一致。
 
 ---
 
@@ -83,7 +84,7 @@ cd "C:\Users\LANCANG\Desktop\Code\DSH Plugs\dsh-live-terminal"
 
 npm install
 npm run build        # 构建 client-src -> lib/client.js
-npm test             # 158 个 host 单测
+npm test             # 166 个 host 单测
 
 npm publish --registry=https://registry.npmjs.org --access public
 ```
@@ -93,6 +94,9 @@ npm publish --registry=https://registry.npmjs.org --access public
 - `package.json` 的 `publishConfig` 已指向 npmjs 且 `access: public`，但本机 `.npmrc` 是 npmmirror，**显式加 `--registry` 最稳妥**。
 - 2FA 账号会提示 OTP，可加 `--otp 123456`。
 - `prepack` 钩子会先跑 `node tools/build-client.mjs`，保证 npm tarball 里的 `lib/client.js` 来自最新源码。
+- **打 tag**：只在绿的 `main` CI 上打 tag 并推送：`git tag -a v1.1.0 -m "dsh-live-terminal v1.1.0" && git push origin v1.1.0`（tag 由维护者/Lead 创建；`npm version` 也会自动建 tag）。
+- **bundle freshness**：发布前确认 `git diff --exit-code -- lib/client.js` 为空（CI 的 windows job 已把它作为门禁），保证 npm tarball 的 client bundle 与仓库提交一致；有 diff 时先 `npm run build` 并提交产物。
+- **发布后从 npm tarball 重新安装冒烟**：`npm pack dsh-live-terminal@1.1.0 --registry=https://registry.npmjs.org` 取 tarball → 在全新 profile 用该 tarball 安装（或 `dsh plugin add` 后确认装的是该版本）→ 按 §4 清单验证 host 路由与 client UI。
 
 ### 2.1 首次发布：staged 版本与 2FA 批准（参考流程，1.0.0 已完成）
 

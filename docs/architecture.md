@@ -74,7 +74,7 @@ tools/
 ### 4.1 Cordis 入口 `lib/index.js`
 
 ```js
-export const name = 'dsh-terminal-panel'
+export const name = 'dsh-live-terminal'
 export const inject = ['tools'] // 必需；其余服务在 apply 中可选获取
 
 export function apply(ctx) {
@@ -165,6 +165,7 @@ const handle = await subprocess.spawnTerminal({
 - `admit` 失败：401（未认证）/403（不信任），直接 `res.end`。
 - SSE：`Content-Type: text/event-stream`、`Cache-Control: no-cache`、`Connection: keep-alive`；每个事件 `event: <name>\ndata: <json>\n\n`；正常关闭/超时/`req.close` 时清理订阅。
 - SSE 背压（v1.1）：每条连接待发帧上限 `MAX_STREAM_BUFFER_BYTES` = 4 MiB；`res.write()` 返回 false 时暂停并等待 `drain`；超限时直接 `close()` 该慢连接（客户端 EventSource 按 `retry: 1000` 重连并从新 snapshot 重同步），host 内存因此有界。
+- 快照有界（v1.1）：`GET /snapshot` 与 per-session SSE 首帧的 ANSI 序列化固定只带最近 `SSE_SNAPSHOT_SCROLLBACK` = 500 行 scrollback，保证单帧远低于 4 MiB 上限。
 - 请求体解析：手写有界读取（≤1MB），不要引入框架。
 
 `SessionInfo` 形状（client/host 共用）：
@@ -352,5 +353,7 @@ export function apply(ctx) {
 | 容量 | `maxSessions` 的占位/回收原子化（并发 create 不突破上限）；agent 交互终端超容量时回收最旧者；`startingDefaults` 保护启动中的默认交互终端不被误回收。 |
 | `wait:false` | `live_terminal_run(wait:false)` 立即返回、后台继续运行，不再受 `commandTimeoutMs` 默认超时自动终止；由用户手动关闭或等其自行结束。 |
 | SSE 背压 | 每条 SSE 连接待发帧上限 4MiB；`res.write()` 返回 false 时暂停等待 `drain`；超限时断开该慢连接（EventSource 按 `retry: 1000` 重连并重新同步 snapshot），host 内存有界。 |
+| 工具 ownership | 工具只能看到/操作本 agent 自己的终端：`owner==='user'` 的终端对 agent 只读可见（list/read/screenshot 允许，send/close 拒绝）；`owner==='agent'` 仅当 `session.agentId === agent.id` 时可见且可写；其它 agent 的终端对 list/read/screenshot/send/close 全部拒绝并给出明确错误。 |
+| 快照与截图有界 | `/snapshot` 与 per-session SSE 首帧固定 `scrollback: 500`（`SSE_SNAPSHOT_SCROLLBACK`），单帧远低于 4MiB 队列上限；`live_terminal_screenshot(withScrollback)` 的 `text` 按 `maxOutputBytes` 保留 UTF-8 尾部并加截断说明，`ansi` 使用 `scrollback: 500` 而不是全量滚动缓冲。 |
 | client | 输入串行队列（单请求 ≤32KB 分片、失败上报）、HTTP 10s 超时、全局 sessions SSE 单例、主题/resize 去抖、tabs/overlay a11y 增强；client 版本号由构建期 `__PLUGIN_VERSION__` 注入。 |
 | 版本 | `1.1.0`。 |

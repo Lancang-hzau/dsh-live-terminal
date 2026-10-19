@@ -295,13 +295,14 @@ node tools/qa-e2e.mjs --slow --host-log=qa/artifacts/devhost-3105-final2.log "<t
 
 | 项 | v1.1 结果 |
 |---|---|
-| host 单元测试 | **158/158 PASS**（`npm test`，`tests/*.test.mjs`；133 v1.1 + apply 7 + routes 17 + tools 1） |
+| host 单元测试 | **166/166 PASS**（`npm test`，`tests/*.test.mjs`；133 v1.1 + apply 7 + routes 17 + tools 1 + 收尾 8） |
+| CI 门禁 | GitHub Actions：`windows-latest` Node 22/24 全量（`npm run build` → bundle freshness `git diff --exit-code -- lib/client.js` → `npm test` → `npm run typecheck`）；`ubuntu-latest` Node 24 跑平台无关子集（排除 `tests/registry.test.mjs`，其断言 Windows 路径语义）。166 为当前基线；ubuntu 子集首跑由 CI 验证 |
 | TypeScript | `npm run typecheck` **0 error** |
-| 官方构建产物 | `lib/client.js` **396,639 B / gzip 101.5 KiB**（client v1.1 改动后；版本号构建期注入，bundle 内 `version:"1.1.0"`，构建确定性 sha 稳定） |
-| 真实 dev host e2e | **21 PASS / 0 FAIL / 1 SKIP**（P0 修复后复跑确认） |
-| mock e2e | **24 PASS / 0 FAIL / 1 SKIP**（P0 修复后复跑 4 次，其中 1 次首跑 resize 断言受 headless rAF 时序偶发影响，重跑不复现） |
+| 官方构建产物 | `lib/client.js` **396,637 B / gzip 101.5 KiB**（v1.1 收尾后；版本号构建期注入，bundle 内 `version:"1.1.0"`，构建确定性 sha 稳定 `03563DCB…`） |
+| 真实 dev host e2e | **21 PASS / 0 FAIL / 1 SKIP**（收尾批次后复跑确认，client 报 `version:"1.1.0"`） |
+| mock e2e | **24 PASS / 0 FAIL / 1 SKIP**（收尾批次后复跑；此前 P0 轮曾 1 次首跑 resize 断言受 headless rAF 时序偶发影响，重跑不复现） |
 | v1.1 专项浏览器探针 | **15/15 PASS** |
 | P0 修复独立探针 | apply direct/deferred **19/19**、SSE 背压/有界/drain **16/16**、`wait:false` 不 kill **12/12** PASS |
-| 独立验证 | 三轮：v1.1 两轮（发现并修复“启动窗口期默认交互终端被容量回收”边界，修复后复验 **PASS×3**）；P0+版本/文档轮 9 项中代码/测试/构建/契约全 PASS，文档 4 处不一致已修正 |
+| 独立验证 | 四轮：v1.1 两轮（发现并修复“启动窗口期默认交互终端被容量回收”边界，复验 PASS×3）；P0+版本/文档轮（文档 4 处不一致已修正并复核 4/4）；收尾批次轮（host P2 + 打包/CI） |
 
 - 结论：v1.1 达到发布门槛（host 单测 / typecheck / 构建 / e2e / 浏览器探针全绿）；剩余 O-3、O-4 为非阻断观察项，不影响发布。

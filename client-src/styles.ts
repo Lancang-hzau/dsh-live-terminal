@@ -3,7 +3,7 @@
  *
  * Kept as a plain string (no CSS modules) because the bundle is a single file;
  * `index.tsx` injects it together with xterm's own CSS into one idempotent
- * `<style data-plugin="dsh-terminal-panel">` tag. Colors follow the `--dsw-*`
+ * `<style data-plugin="dsh-live-terminal">` tag. Colors follow the `--dsw-*`
  * design tokens with graceful fallbacks.
  */
 

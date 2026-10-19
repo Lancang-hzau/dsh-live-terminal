@@ -250,7 +250,7 @@ function notifyThemeListeners(): void {
     try {
       listener()
     } catch (error) {
-      console.warn('[dsh-terminal-panel] theme listener failed', error)
+      console.warn('[dsh-live-terminal] theme listener failed', error)
     }
   }
 }

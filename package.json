@@ -38,8 +38,7 @@
     "cordis.patch.yml",
     "README.md",
     "LICENSE",
-    "icon.svg",
-    "screenshots.json"
+    "icon.svg"
   ],
   "dependencies": {
     "@xterm/addon-serialize": "^0.14.0",

@@ -140,7 +140,7 @@ screenshots.json     市场截图清单
 ```powershell
 npm install                          # 安装构建/测试依赖
 npm run build                        # 构建 client-src → lib/client.js
-npm test                             # host 单元测试（158 cases）
+npm test                             # host 单元测试（166 cases）
 npm run typecheck
 
 # 独立 dev host（不影响正在运行的 Desktop DSH）
@@ -148,7 +148,9 @@ npm run typecheck
 # 用日志里的带 token URL 打开页面；右侧栏快捷键：Ctrl+Shift+B
 ```
 
-本机验收（2026-10-19）：host 单测 158/158 PASS；独立 e2e（真实 Chrome）44 PASS / 0 FAIL / 1 SKIP（v1.0 验收数字）；真实 agent 手动项（命令拦截可见、自动弹出、`live_terminal_run` + `live_terminal_screenshot`、cwd）全部 PASS；Desktop 实机安装并重启后验证通过。v1.1 复核数字（host 单测 158/158、e2e、浏览器探针）见 [`docs/test-report.md`](./docs/test-report.md) 的「v1.1 验证补充」。
+CI（GitHub Actions）：`windows-latest` 用 Node 22/24 跑全量（`npm ci` → `npm run build` → bundle freshness（`git diff --exit-code -- lib/client.js`，产物未同步即失败）→ `npm test` → `npm run typecheck`）；`ubuntu-latest`（Node 24）跑平台无关测试子集（排除断言 Windows 路径语义的 `tests/registry.test.mjs`）。配置见 `.github/workflows/ci.yml`。
+
+本机验收（2026-10-19）：host 单测 166/166 PASS；独立 e2e（真实 Chrome）44 PASS / 0 FAIL / 1 SKIP（v1.0 验收数字）；真实 agent 手动项（命令拦截可见、自动弹出、`live_terminal_run` + `live_terminal_screenshot`、cwd）全部 PASS；Desktop 实机安装并重启后验证通过。v1.1 复核数字（host 单测 166/166、e2e、浏览器探针）见 [`docs/test-report.md`](./docs/test-report.md) 的「v1.1 验证补充」。
 
 ### 发布
 

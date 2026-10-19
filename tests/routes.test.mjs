@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { test } from 'node:test'
-import { MAX_STREAM_BUFFER_BYTES, ROUTE_PREFIX, registerRoutes } from '../lib/host/routes.js'
+import { MAX_STREAM_BUFFER_BYTES, ROUTE_PREFIX, SSE_SNAPSHOT_SCROLLBACK, registerRoutes } from '../lib/host/routes.js'
 
 /** One plain `SessionInfo` used by every route test. */
 const SESSION_INFO = {
@@ -125,6 +125,7 @@ class FakeResponse extends EventEmitter {
  */
 function fakeSession(overrides = {}) {
   const subscription = { listeners: [], unsubscribed: false }
+  const snapshotCalls = []
   const session = {
     id: SESSION_INFO.id,
     title: SESSION_INFO.title,
@@ -134,7 +135,9 @@ function fakeSession(overrides = {}) {
     rows: SESSION_INFO.rows,
     writes: [],
     resizes: [],
-    snapshot() {
+    snapshotCalls,
+    snapshot(options) {
+      snapshotCalls.push(options)
       return { info: SESSION_INFO, screen: 'ansi-screen', text: 'visible', cursor: { x: 1, y: 2 }, seq: 7 }
     },
     subscribe(listener) {
@@ -311,7 +314,8 @@ test('GET /sessions returns the session list', async () => {
 })
 
 test('GET /snapshot returns the screen, missing ids are 400/404', async () => {
-  const { handler } = setupRoutes()
+  const { session } = fakeSession()
+  const { handler } = setupRoutes({ registry: fakeRegistry({ session }) })
   const { res } = await dispatch(handler, { url: '/snapshot?id=s1' })
   assert.equal(res.statusCode, 200)
   assert.deepEqual(jsonBody(res), {
@@ -320,6 +324,7 @@ test('GET /snapshot returns the screen, missing ids are 400/404', async () => {
     text: 'visible',
     cursor: { x: 1, y: 2 },
   })
+  assert.deepEqual(session.snapshotCalls, [{ scrollback: SSE_SNAPSHOT_SCROLLBACK }], 'HTTP snapshots bound the scrollback')
 
   const missing = await dispatch(handler, { url: '/snapshot?id=missing' })
   assert.equal(missing.res.statusCode, 404)
@@ -479,6 +484,7 @@ test('GET /events?id= streams the snapshot and forwards session events', async (
   assert.equal(res.frames[0], 'retry: 1000\n')
   assert.match(res.frames[1], /^event: snapshot\ndata: /)
   assert.ok(res.frames[1].includes('"screen":"ansi-screen"'))
+  assert.deepEqual(session.snapshotCalls, [{ scrollback: SSE_SNAPSHOT_SCROLLBACK }], 'SSE first frame bounds the scrollback')
   assert.equal(subscription.listeners.length, 1)
 
   subscription.listeners[0]('output', { id: 's1', seq: 8, chunk: 'x' })

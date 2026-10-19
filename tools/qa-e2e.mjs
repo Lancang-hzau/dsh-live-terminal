@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Independent QA e2e harness for the dsh-terminal-panel plugin.
+ * Independent QA e2e harness for the dsh-live-terminal plugin.
  *
  * Drives the DSH Web GUI with Playwright + the system Chrome (UI assertions) and
  * validates the plugin's HTTP + SSE contract with fetch (every request is a real
@@ -45,7 +45,7 @@ const help = flags.has('help') || flags.has('h')
 const url = positional[0] ?? process.env.DSH_QA_URL
 
 if (help) {
-  console.log(`dsh-terminal-panel independent QA e2e
+  console.log(`dsh-live-terminal independent QA e2e
 
 usage: node tools/qa-e2e.mjs <url-with-token> [options]
 
@@ -1221,10 +1221,10 @@ async function runPostUiRuntimeChecks() {
   }
   await test('E-04', '刷新/多会话后无 plugin 运行时异常（非 plugin 错误单独记录）', 'AUTO-UI', async () => {
     const pluginPageErrors = pageErrors.filter((entry) =>
-      /dsh-terminal-panel|__DSH_TERMINAL_PANEL|dshtp|plugin_?chunk/i.test(entry),
+      /dsh-(?:terminal-panel|live-terminal)|__DSH_TERMINAL_PANEL|dshtp|plugin_?chunk/i.test(entry),
     )
     const pluginConsoleErrors = consoleErrors.filter((text) =>
-      /dsh-terminal-panel|ModuleLoader|Failed to load plugins|missed the module table/i.test(text),
+      /dsh-(?:terminal-panel|live-terminal)|ModuleLoader|Failed to load plugins|missed the module table/i.test(text),
     )
     const problems = [...pluginPageErrors, ...pluginConsoleErrors].slice(0, 5)
     assert(problems.length === 0, `UI 交互期间出现 plugin 相关异常: ${problems.join(' | ')}`)
@@ -1251,10 +1251,10 @@ async function runClientLoadChecks() {
   }
   await test('E-03', 'client bundle 加载无 plugin console error / pageerror', 'AUTO-UI', async () => {
     const marker = await page.evaluate(() => Boolean(globalThis.__DSH_TERMINAL_PANEL__)).catch(() => false)
-    const clientLog = consoleMessages.some((line) => line.includes('[dsh-terminal-panel] client half loaded'))
+    const clientLog = consoleMessages.some((line) => line.includes('client half loaded'))
     assert(marker || clientLog, '未检测到 client bundle 加载标记（__DSH_TERMINAL_PANEL__ 或 "client half loaded" 日志）')
     const pluginConsoleErrors = consoleErrors.filter((text) =>
-      /dsh-terminal-panel|ModuleLoader|Failed to load plugins|missed the module table/i.test(text),
+      /dsh-(?:terminal-panel|live-terminal)|ModuleLoader|Failed to load plugins|missed the module table/i.test(text),
     )
     const bundleFailures = pluginHttpFailures.filter((line) => line.includes('/plugins/') || /^5\d\d /.test(line))
     const problems = []
@@ -1707,8 +1707,8 @@ async function runEnvironmentChecks() {
     assert(existsSync(HOST_LOG), `日志文件不存在: ${HOST_LOG}`)
     const content = readFileSync(HOST_LOG, 'utf8')
     const lines = content.split(/\r?\n/)
-    const pluginLines = lines.filter((line) => line.includes('dsh-terminal-panel'))
-    const errorLines = lines.filter((line) => /dsh-terminal-panel/i.test(line) && /error|exception|failed|cannot|throw/i.test(line))
+    const pluginLines = lines.filter((line) => /(dsh-terminal-panel|dsh-live-terminal)/i.test(line))
+    const errorLines = lines.filter((line) => /(dsh-terminal-panel|dsh-live-terminal)/i.test(line) && /error|exception|failed|cannot|throw/i.test(line))
     assert(errorLines.length === 0, `启动日志包含插件错误: ${errorLines.slice(0, 5).join(' | ')}`)
     return { pluginLogLines: pluginLines.slice(0, 10), errorLines: 0 }
   })
@@ -1838,7 +1838,7 @@ const startedAtMs = Date.now()
 const startIso = nowIso()
 
 async function main() {
-  console.log(`dsh-terminal-panel QA e2e  runId=${runId}`)
+  console.log(`dsh-live-terminal QA e2e  runId=${runId}`)
   console.log(`url: ${url}`)
   console.log(`artifacts: ${artifacts}`)
   if (HTTP_ONLY) console.log('mode: --http-only (UI 断言跳过)')

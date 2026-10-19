@@ -85,3 +85,15 @@ test('ScreenMirror dispose releases the emulator and tolerates empty writes', as
   assert.equal(screen.visibleText(), '')
   await assert.rejects(() => screen.write('after dispose'), /disposed/)
 })
+
+test('ScreenMirror reads after dispose return empty values without touching the emulator', async () => {
+  const screen = new ScreenMirror({ cols: 20, rows: 3, scrollback: 100 })
+  await screen.write('one\r\ntwo\r\nthree\r\nfour')
+  screen.dispose()
+  // These must not read #terminal.buffer after dispose (that would make xterm
+  // log "DisposableStore has already been disposed" to stderr).
+  assert.equal(screen.visibleText(), '')
+  assert.equal(screen.fullText(), '')
+  assert.deepEqual(screen.cursor(), { x: 0, y: 0 })
+  assert.equal(screen.serialize(), '')
+})

@@ -218,3 +218,29 @@ test('waitReady returns after the shell output becomes quiet', async () => {
   await session.whenExited
   await session.dispose()
 })
+
+test('snapshot(options.scrollback) bounds the serialized scrollback', async () => {
+  const handle = fakeHandle()
+  const session = makeSession(handle, { cols: 20, rows: 3 })
+  try {
+    // 10 lines on a 3-row terminal: the first 7 lines scroll out of the viewport.
+    const lines = Array.from({ length: 10 }, (_entry, index) => `line-${index + 1}`).join('\r\n')
+    handle.push(lines)
+    await waitFor(() => session.visibleText().includes('line-10'))
+
+    const unbounded = session.snapshot()
+    assert.ok(unbounded.screen.includes('line-7'), 'default snapshot keeps the whole retained buffer')
+    assert.ok(unbounded.screen.includes('line-8'))
+    assert.ok(unbounded.screen.includes('line-10'))
+
+    const viewportOnly = session.snapshot({ scrollback: 0 })
+    assert.ok(!viewportOnly.screen.includes('line-7'), 'scrollback:0 excludes lines scrolled out of the viewport')
+    assert.ok(viewportOnly.screen.includes('line-8'), 'scrollback:0 still serializes the viewport')
+    assert.ok(viewportOnly.screen.includes('line-10'))
+    assert.equal(viewportOnly.text, session.visibleText(), 'visible text is unaffected by the scrollback bound')
+  } finally {
+    handle.finish()
+    await session.whenExited
+    await session.dispose()
+  }
+})

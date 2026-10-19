@@ -13,11 +13,12 @@ const agent = { id: 'agent-1', session: { id: 'session-1' } }
  * @returns {any} session info.
  */
 function sessionInfo(id, kind, overrides = {}) {
-  return {
+  const info = {
     id,
     title: kind === 'command' ? 'Get-ChildItem' : 'PowerShell',
     kind,
     owner: 'agent',
+    agentId: 'agent-1',
     cwd: 'C:\\work',
     cols: 120,
     rows: 30,
@@ -27,22 +28,29 @@ function sessionInfo(id, kind, overrides = {}) {
     updatedAt: 2,
     ...overrides,
   }
+  for (const key of Object.keys(info)) {
+    if (info[key] === undefined) delete info[key]
+  }
+  return info
 }
 
 /**
  * Session double with the subset the tools use.
  * @param {string} id session id.
  * @param {'command' | 'interactive'} kind session kind.
+ * @param {object} [overrides] session info overrides.
  * @returns {any} fake session.
  */
-function fakeSession(id, kind) {
-  const info = sessionInfo(id, kind)
-  const state = { written: [], snapshots: 0 }
+function fakeSession(id, kind, overrides = {}) {
+  const info = sessionInfo(id, kind, overrides)
+  const state = { written: [], snapshots: 0, serializeCalls: [], snapshotCalls: [] }
   const exit = Promise.withResolvers()
   return {
     id,
     title: info.title,
     kind,
+    owner: info.owner,
+    agentId: info.agentId,
     state: info.state,
     cols: info.cols,
     rows: info.rows,
@@ -63,31 +71,39 @@ function fakeSession(id, kind) {
     fullText() {
       return kind === 'command' ? 'scrollback\ncommand screen' : 'scrollback\ninteractive screen'
     },
-    serialize() {
+    serialize(options) {
+      state.serializeCalls.push(options)
       return `ansi-${kind}`
     },
-    snapshot() {
+    snapshot(options) {
       state.snapshots += 1
-      return { info, screen: `ansi-${kind}`, text: `${kind} screen`, cursor: { x: 3, y: 4 }, seq: 2 }
+      state.snapshotCalls.push(options)
+      return { info, screen: this.serialize(options), text: `${kind} screen`, cursor: { x: 3, y: 4 }, seq: 2 }
     },
   }
 }
 
 /**
  * Registry double covering every registry call the tools make.
- * @param {{ noDefault?: boolean, noRecent?: boolean, waitResult?: object, waitThrows?: boolean }} [options] behaviour overrides.
+ * @param {{ noDefault?: boolean, noRecent?: boolean, waitResult?: object, waitThrows?: boolean, extra?: any[] }} [options] behaviour overrides.
  * @returns {any} registry duplicate with typed call recording.
  */
 function fakeRegistry(options = {}) {
   const command = fakeSession('command-1', 'command')
   const interactive = fakeSession('terminal-1', 'interactive')
+  const sessions = new Map([
+    [command.id, command],
+    [interactive.id, interactive],
+  ])
+  for (const extra of options.extra ?? []) sessions.set(extra.id, extra)
   const calls = { created: [], waited: [], ensured: 0, closed: [] }
   return {
     calls,
     command,
     interactive,
-    list: () => [interactive.info, command.info],
-    lookup: (id) => (id === command.id ? command : id === interactive.id ? interactive : undefined),
+    sessions: [...sessions.values()],
+    list: () => [...sessions.values()].map((session) => session.info),
+    lookup: (id) => sessions.get(id),
     resolveForAgent: () => (options.noDefault === true ? undefined : interactive),
     resolveRecentForAgent: () => (options.noRecent === true ? undefined : command),
     async ensureAgentTerminal() {
@@ -317,6 +333,17 @@ test('live_terminal_screenshot withScrollback returns scrollback text and ANSI',
   assert.ok(value.ansi.includes('ansi-command'))
 })
 
+test('live_terminal_screenshot bounds withScrollback text and ANSI', async () => {
+  const registry = fakeRegistry()
+  const { definitions } = setup(registry, { maxOutputBytes: 8 })
+  const { value } = await runTool(definitions, 'live_terminal_screenshot', { withScrollback: true })
+  // fullText is 'scrollback\ncommand screen' (24 UTF-8 bytes) → tail-bounded to 8 bytes.
+  assert.match(value.text, /^\[scrollback truncated: last 8 bytes\]\n/)
+  assert.ok(value.text.endsWith('d screen'))
+  assert.deepEqual(registry.command._state.serializeCalls.at(-1), { scrollback: 500 })
+  assert.deepEqual(registry.command._state.snapshotCalls.at(-1), { scrollback: 500 })
+})
+
 test('live_terminal_screenshot fails clearly when the agent has no visible terminal', async () => {
   const { definitions } = setup(fakeRegistry({ noRecent: true }))
   await assert.rejects(() => runTool(definitions, 'live_terminal_screenshot', {}), /no visible terminal/)
@@ -385,6 +412,79 @@ test('live_terminal_close closes an existing terminal and rejects unknown ids', 
   assert.deepEqual(closed.value, { ok: true })
   assert.deepEqual(registry.calls.closed, ['command-1'])
   await assert.rejects(() => runTool(definitions, 'live_terminal_close', { terminalId: 'missing' }), /not found/)
+})
+
+/**
+ * Registry with a user-owned terminal and a terminal owned by another agent.
+ * @returns {any} registry double.
+ */
+function ownershipRegistry() {
+  const userTerminal = fakeSession('user-1', 'interactive', { owner: 'user', agentId: undefined })
+  const crossTerminal = fakeSession('cross-1', 'interactive', { agentId: 'agent-2' })
+  return fakeRegistry({ extra: [userTerminal, crossTerminal] })
+}
+
+test('live_terminal_list only exposes own and user-owned terminals', async () => {
+  const { definitions } = setup(ownershipRegistry())
+  const { value } = await runTool(definitions, 'live_terminal_list', {})
+  assert.deepEqual(value.terminals.map((terminal) => terminal.id).sort(), [
+    'command-1',
+    'terminal-1',
+    'user-1',
+  ])
+
+  const anonymous = await runTool(definitions, 'live_terminal_list', {}, { agent: undefined })
+  assert.deepEqual(anonymous.value.terminals.map((terminal) => terminal.id), ['user-1'])
+})
+
+test('live_terminal_send only writes to the agent own terminals', async () => {
+  const registry = ownershipRegistry()
+  const { definitions } = setup(registry)
+  await assert.rejects(
+    () => runTool(definitions, 'live_terminal_send', { terminalId: 'user-1', text: 'x' }),
+    /user-owned and read-only/,
+  )
+  await assert.rejects(
+    () => runTool(definitions, 'live_terminal_send', { terminalId: 'cross-1', text: 'x' }),
+    /belongs to another agent/,
+  )
+  const own = await runTool(definitions, 'live_terminal_send', { terminalId: 'terminal-1', text: 'hi' })
+  assert.deepEqual(own.value, { ok: true, terminalId: 'terminal-1' })
+})
+
+test('live_terminal_read allows user terminals and rejects other agents', async () => {
+  const { definitions } = setup(ownershipRegistry())
+  const user = await runTool(definitions, 'live_terminal_read', { terminalId: 'user-1' })
+  assert.equal(user.value.terminalId, 'user-1')
+  await assert.rejects(
+    () => runTool(definitions, 'live_terminal_read', { terminalId: 'cross-1' }),
+    /belongs to another agent/,
+  )
+})
+
+test('live_terminal_screenshot allows user terminals and rejects other agents', async () => {
+  const { definitions } = setup(ownershipRegistry())
+  const user = await runTool(definitions, 'live_terminal_screenshot', { terminalId: 'user-1' })
+  assert.equal(user.value.terminalId, 'user-1')
+  await assert.rejects(
+    () => runTool(definitions, 'live_terminal_screenshot', { terminalId: 'cross-1' }),
+    /belongs to another agent/,
+  )
+})
+
+test('live_terminal_close only closes the agent own terminals', async () => {
+  const registry = ownershipRegistry()
+  const { definitions } = setup(registry)
+  await assert.rejects(
+    () => runTool(definitions, 'live_terminal_close', { terminalId: 'user-1' }),
+    /user-owned and read-only/,
+  )
+  await assert.rejects(
+    () => runTool(definitions, 'live_terminal_close', { terminalId: 'cross-1' }),
+    /belongs to another agent/,
+  )
+  const own = await runTool(definitions, 'live_terminal_close', { terminalId: 'command-1' })
+  assert.deepEqual(own.value, { ok: true })
 })
 
 test('tools fail clearly when the terminal backend is unavailable', async () => {

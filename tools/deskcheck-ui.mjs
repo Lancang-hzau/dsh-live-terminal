@@ -47,6 +47,6 @@ await browser.close()
 console.log(JSON.stringify({
   marker: result.marker,
   guideEntryVisible: result.panelMentions > 0,
-  pluginLog: logs.filter((line) => line.includes('dsh-terminal-panel')),
+  pluginLog: logs.filter((line) => line.includes('dsh-live-terminal')),
   pageErrors: errors,
 }, null, 2))

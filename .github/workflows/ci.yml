@@ -6,10 +6,37 @@ on:
   pull_request:
 
 jobs:
+  # Full suite on Windows: the host half targets PowerShell/ConPTY and the test
+  # set asserts Windows path/argv semantics, so the complete suite runs here.
   test:
-    # The plugin targets Windows first (PowerShell/ConPTY); host unit tests
-    # assert Windows path and argv semantics, so the CI runner is Windows.
+    name: test (windows, node ${{ matrix.node }})
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      # Gate: the committed browser bundle must be exactly what the build
+      # produces, otherwise a client-src change could ship stale to npm users.
+      - name: bundle freshness
+        run: git diff --exit-code -- lib/client.js
+      - run: npm test
+      - run: npm run typecheck
+
+  # Platform-independent host logic only. tests/registry.test.mjs is
+  # deliberately excluded: it asserts Windows path/argv semantics (C:\ fixtures
+  # resolved through node:path) and reports false failures on POSIX. Keep this
+  # file list in sync with the platform-neutral tests under tests/.
+  test-linux-subset:
+    name: test-linux-subset (ubuntu, node 24)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -17,6 +44,17 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run build
-      - run: npm test
-      - run: npm run typecheck
+      - name: platform-independent host tests
+        run: >-
+          node --test --test-isolation=none
+          tests/apply.test.mjs
+          tests/ansi.test.mjs
+          tests/intercept.test.mjs
+          tests/intercept-value.test.mjs
+          tests/ring.test.mjs
+          tests/routes.test.mjs
+          tests/screen.test.mjs
+          tests/session.test.mjs
+          tests/shell.test.mjs
+          tests/tools.test.mjs
+          tests/wrapper.test.mjs

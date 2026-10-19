@@ -1,5 +1,5 @@
 /**
- * HTTP / SSE client for the `dsh-terminal-panel` host half.
+ * HTTP / SSE client for the `dsh-live-terminal` host half.
  *
  * All requests are same-origin and authenticated by the DSH session cookie
  * (architecture.md §4.4). Every payload is parsed defensively so that the UI
@@ -352,7 +352,7 @@ function listenSse(
     try {
       handler(parseSseData(event))
     } catch (error) {
-      console.warn('[dsh-terminal-panel] failed to handle SSE frame', name, error)
+      console.warn('[dsh-live-terminal] failed to handle SSE frame', name, error)
     }
   })
 }
@@ -392,14 +392,14 @@ export function openSessionStream(
     try {
       handlers.onOpen?.()
     } catch (error) {
-      console.warn('[dsh-terminal-panel] SSE open handler failed', error)
+      console.warn('[dsh-live-terminal] SSE open handler failed', error)
     }
   })
   source.addEventListener('error', () => {
     try {
       handlers.onError?.()
     } catch (error) {
-      console.warn('[dsh-terminal-panel] SSE error handler failed', error)
+      console.warn('[dsh-live-terminal] SSE error handler failed', error)
     }
   })
   return () => source.close()
@@ -435,7 +435,7 @@ function fanoutSessions(
     try {
       dispatch(handlers)
     } catch (error) {
-      console.warn('[dsh-terminal-panel] sessions SSE subscriber failed', error)
+      console.warn('[dsh-live-terminal] sessions SSE subscriber failed', error)
     }
   }
 }
@@ -471,7 +471,7 @@ export function openSessionsStream(handlers: SessionsStreamHandlers): () => void
       try {
         handlers.onOpen?.()
       } catch (error) {
-        console.warn('[dsh-terminal-panel] sessions SSE replay failed', error)
+        console.warn('[dsh-live-terminal] sessions SSE replay failed', error)
       }
     })
   }

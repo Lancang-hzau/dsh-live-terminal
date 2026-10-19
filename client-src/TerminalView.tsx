@@ -210,7 +210,7 @@ export function TerminalView(props: TerminalViewProps) {
       try {
         fitAddon.fit()
       } catch (error) {
-        console.warn('[dsh-terminal-panel] fit failed', error)
+        console.warn('[dsh-live-terminal] fit failed', error)
       }
     }
     let frame = 0

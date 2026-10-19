@@ -7,12 +7,17 @@
 #
 # It never modifies D:\DSH. Run from anywhere:  powershell -File tools\install-desktop.ps1
 # Kept ASCII-only: Windows PowerShell 5.1 reads BOM-less .ps1 as ANSI.
+#
+# -Port probes the running Desktop GUI (informational only); it defaults to the
+# current Desktop port and can be overridden when the GUI picked another one.
+
+param([int]$Port = 54877)
 
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 $pkg = $repo
 $dsh = 'D:\DSH\resources\runtime\cli\bin\dsh.cmd'
-$base = 'http://127.0.0.1:58966'
+$base = "http://127.0.0.1:$Port"
 $oldName = 'dsh-terminal-panel'
 
 Write-Host '[1/5] building client bundle'
