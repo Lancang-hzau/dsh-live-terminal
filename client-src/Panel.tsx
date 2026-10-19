@@ -10,7 +10,8 @@
  * request failure turns into a retryable error state instead of a crash.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 
 import {
   API_PREFIX,
@@ -172,6 +173,12 @@ export function Panel(props: PanelProps) {
   const conversationSessionIdRef = useRef<string | undefined>(undefined)
   conversationSessionIdRef.current = conversationSessionId
 
+  // a11y: one panel body id per Panel occurrence, tabs point at it via
+  // aria-controls / aria-labelledby (multiple panel tabs may coexist).
+  const tabPanelId = useId()
+  const tabRefs = useRef(new Map<string, HTMLDivElement>())
+  const tabIdFor = (id: string): string => `${tabPanelId}-tab-${id}`
+
   /* ---------------------------------------------------------------- */
   /* Session list                                                      */
   /* ---------------------------------------------------------------- */
@@ -307,6 +314,22 @@ export function Panel(props: PanelProps) {
     setTermError(message)
   }, [])
 
+  /**
+   * Pin the selection once the user actually uses the screen (typing or
+   * pointerdown), so a new agent command session cannot switch away from the
+   * terminal the user is working in.
+   */
+  const pinSelection = useCallback((): void => {
+    pinnedRef.current = true
+  }, [])
+
+  const handleInputError = useCallback(
+    (message: string): void => {
+      setToast(`${t('inputFailed')}: ${message}`)
+    },
+    [t],
+  )
+
   /* ---------------------------------------------------------------- */
   /* Toolbar actions                                                   */
   /* ---------------------------------------------------------------- */
@@ -414,6 +437,7 @@ export function Panel(props: PanelProps) {
   /* Render                                                            */
   /* ---------------------------------------------------------------- */
   const selected = sessions.find((session) => session.id === selectedId) ?? null
+  const orderedSessions = sortByRecency(sessions)
   const connectionLabel =
     connection === 'connected'
       ? t('connected')
@@ -426,6 +450,30 @@ export function Panel(props: PanelProps) {
       ? t('hostNotReady')
       : t('listErrorHint')
     : null
+
+  /** WAI-ARIA tabs keyboard model: roving selection with Arrow/Home/End. */
+  const handleTabListKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+    if (orderedSessions.length === 0) return
+    const ids = orderedSessions.map((session) => session.id)
+    const currentIndex = selectedId === null ? -1 : ids.indexOf(selectedId)
+    let nextIndex: number | undefined
+    if (event.key === 'ArrowRight') {
+      nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % ids.length
+    } else if (event.key === 'ArrowLeft') {
+      nextIndex = currentIndex <= 0 ? ids.length - 1 : currentIndex - 1
+    } else if (event.key === 'Home') {
+      nextIndex = 0
+    } else if (event.key === 'End') {
+      nextIndex = ids.length - 1
+    }
+    if (nextIndex === undefined) return
+    const nextId = ids[nextIndex]
+    if (nextId === undefined) return
+    event.preventDefault()
+    pinSelection()
+    setSelectedId(nextId)
+    tabRefs.current.get(nextId)?.focus()
+  }
 
   return (
     <section
@@ -495,28 +543,43 @@ export function Panel(props: PanelProps) {
       </div>
 
       {sessions.length > 0 ? (
-        <div className="dshtp-tabs" role="tablist" data-dsh-tp-sessions>
-          {sortByRecency(sessions).map((session) => {
+        <div
+          className="dshtp-tabs"
+          role="tablist"
+          aria-label={t('title')}
+          data-dsh-tp-sessions
+          onKeyDown={handleTabListKeyDown}
+        >
+          {orderedSessions.map((session) => {
             const active = session.id === selectedId
             return (
               <div
                 key={session.id}
+                ref={(element) => {
+                  if (element) tabRefs.current.set(session.id, element)
+                  else tabRefs.current.delete(session.id)
+                }}
                 className="dshtp-tab"
                 role="tab"
-                tabIndex={0}
+                id={tabIdFor(session.id)}
+                aria-controls={tabPanelId}
+                tabIndex={active ? 0 : -1}
                 aria-selected={active}
                 data-active={active ? 'true' : 'false'}
                 data-dsh-tp-session-id={session.id}
                 data-dsh-tp-session-state={session.state}
                 title={sessionTitle(session, t)}
                 onClick={() => {
-                  pinnedRef.current = true
+                  pinSelection()
                   setSelectedId(session.id)
                 }}
                 onKeyDown={(event) => {
+                  // Only the tab itself takes Enter/Space; the nested close
+                  // button must keep its native keyboard activation.
+                  if (event.target !== event.currentTarget) return
                   if (event.key !== 'Enter' && event.key !== ' ') return
                   event.preventDefault()
-                  pinnedRef.current = true
+                  pinSelection()
                   setSelectedId(session.id)
                 }}
               >
@@ -527,10 +590,10 @@ export function Panel(props: PanelProps) {
                     {session.exitCode === null ? '—' : String(session.exitCode)}
                   </span>
                 ) : null}
-                <span
+                <button
+                  type="button"
                   className="dshtp-tab-close"
-                  role="button"
-                  tabIndex={-1}
+                  tabIndex={active ? 0 : -1}
                   aria-label={t('closeSession')}
                   title={t('closeSession')}
                   onClick={(event) => {
@@ -539,14 +602,20 @@ export function Panel(props: PanelProps) {
                   }}
                 >
                   <IconClose size={11} />
-                </span>
+                </button>
               </div>
             )
           })}
         </div>
       ) : null}
 
-      <div className="dshtp-body" data-dsh-tp-body>
+      <div
+        className="dshtp-body"
+        id={tabPanelId}
+        role="tabpanel"
+        aria-labelledby={selected ? tabIdFor(selected.id) : undefined}
+        data-dsh-tp-body
+      >
         {selected ? (
           <TerminalView
             key={selected.id}
@@ -555,6 +624,8 @@ export function Panel(props: PanelProps) {
             onConnectionChange={handleConnectionChange}
             onInfo={updateInfo}
             onError={handleSessionError}
+            onInputError={handleInputError}
+            onUserActivity={pinSelection}
             onController={handleController}
           />
         ) : phase === 'loading' ? (
@@ -594,7 +665,12 @@ export function Panel(props: PanelProps) {
         )}
 
         {selected && connection === 'disconnected' ? (
-          <div className="dshtp-overlay" data-dsh-tp-state="disconnected">
+          <div
+            className="dshtp-overlay"
+            role="alert"
+            aria-live="assertive"
+            data-dsh-tp-state="disconnected"
+          >
             <p className="dshtp-state-title">{t('disconnected')}</p>
             <button
               type="button"
@@ -608,7 +684,12 @@ export function Panel(props: PanelProps) {
         ) : null}
 
         {selected && termError ? (
-          <div className="dshtp-overlay" data-dsh-tp-state="session-error">
+          <div
+            className="dshtp-overlay"
+            role="alert"
+            aria-live="assertive"
+            data-dsh-tp-state="session-error"
+          >
             <p className="dshtp-state-title">{termError}</p>
             <button type="button" className="dshtp-btn dshtp-btn-primary" onClick={reconnect}>
               {t('reconnect')}

@@ -3,6 +3,9 @@
  * module loader (served from the platform module table, never installed here).
  */
 
+/** Injected at build time by tools/build-client.mjs from package.json. */
+declare const __PLUGIN_VERSION__: string
+
 declare module '*.css' {
   const css: string
   export default css

@@ -168,7 +168,7 @@ export function apply(ctx: ClientContext): void {
   globalRecord.__DSH_TERMINAL_PANEL__ = true
   globalRecord.__DSH_TERMINAL_PANEL_CLIENT__ = {
     plugin: PLUGIN_ID,
-    version: '1.0.0',
+    version: __PLUGIN_VERSION__,
     apiPrefix: '/dsh-terminal-panel',
     tabKind: TAB_KIND,
   }

@@ -2,6 +2,8 @@
 
 > 本文件是并行开发的唯一契约。Host 引擎、客户端 UI、QA 都必须按这里的路径、接口与事件格式实现；有异议先改本文件并在聊天中说明。
 
+> **修订说明（v1.1，2026-10-19）**：本仓库已迁移为“仓库根即发布包”，包名与目录为 `dsh-live-terminal`；文中出现的 `packages/dsh-terminal-panel`、`packages/dsh-terminal-panel/lib/**` 等路径属于历史并行开发期写法，请按当前仓库根的 `lib/**`、`client-src/**`、`tests/**` 理解。v1.1 新增/调整的契约点（shell 方言、输出流失败、容量回收、`wait:false`、SSE 背压、客户端健壮性）见文末 §8。
+
 ## 1. 目标（用户需求）
 
 1. 在 DSH Web GUI 中拉起可见的终端窗口（真实 PTY，可交互）。
@@ -93,7 +95,7 @@ export function apply(ctx) {
   - `scrollback`（默认 2000）
   - `maxOutputBytes`（默认 262144）
   - `maxSessions`（默认 16）
-  - `commandTimeoutMs`（默认 180000）：拦截命令的默认超时
+  - `commandTimeoutMs`（默认 180000）：`live_terminal_run(wait:true)` 的默认等待超时；被拦截的 pwsh 前台调用固定 120s 上限（`INTERCEPT_DEFAULT_TIMEOUT_MS`，不读此配置）
   - `retainExited`（默认 10）：保留多少个已退出的命令会话用于回看
 
 ### 4.2 PTY 会话（`session.js`）
@@ -162,6 +164,7 @@ const handle = await subprocess.spawnTerminal({
 - JSON 请求/响应；错误统一 `{ error: string }` + 4xx/5xx。
 - `admit` 失败：401（未认证）/403（不信任），直接 `res.end`。
 - SSE：`Content-Type: text/event-stream`、`Cache-Control: no-cache`、`Connection: keep-alive`；每个事件 `event: <name>\ndata: <json>\n\n`；正常关闭/超时/`req.close` 时清理订阅。
+- SSE 背压（v1.1）：每条连接待发帧上限 `MAX_STREAM_BUFFER_BYTES` = 4 MiB；`res.write()` 返回 false 时暂停并等待 `drain`；超限时直接 `close()` 该慢连接（客户端 EventSource 按 `retry: 1000` 重连并从新 snapshot 重同步），host 内存因此有界。
 - 请求体解析：手写有界读取（≤1MB），不要引入框架。
 
 `SessionInfo` 形状（client/host 共用）：
@@ -338,3 +341,16 @@ export function apply(ctx) {
 - 重启 dev host 前先 `job_kill` 旧的（Lead 管理 3101 端口；其他成员需要时使用 3103+ 端口自测并先说明）。
 - 每次改动 client 需 `node tools/build-client.mjs` 后重启 dev host。
 - 文本文件一律用 `write`/`edit` 工具写 UTF-8（不要用 PowerShell `Set-Content` 改中文文本）。
+
+## 8. v1.1 修订记录
+
+| 领域 | v1.1 契约调整 |
+|---|---|
+| 插件装配 | `apply()` 的 registry disposer 统一挂在插件 `ctx` 上：`subprocess`/`workingDirectory` 在 apply 时已就绪（direct 分支）不再因普通对象无 `.effect` 而抛 `TypeError`；deferred 分支保持 `ctx.inject` 行为。 |
+| shell 拦截 | 按工具方言选择 shell（`bash` 方言不再落到 pwsh）；方言解析/启动失败时回退 `next()`，保持原生工具语义。 |
+| 输出流 | PTY 输出流失败时 terminate 整个进程树，避免孤儿进程与悬挂会话。 |
+| 容量 | `maxSessions` 的占位/回收原子化（并发 create 不突破上限）；agent 交互终端超容量时回收最旧者；`startingDefaults` 保护启动中的默认交互终端不被误回收。 |
+| `wait:false` | `live_terminal_run(wait:false)` 立即返回、后台继续运行，不再受 `commandTimeoutMs` 默认超时自动终止；由用户手动关闭或等其自行结束。 |
+| SSE 背压 | 每条 SSE 连接待发帧上限 4MiB；`res.write()` 返回 false 时暂停等待 `drain`；超限时断开该慢连接（EventSource 按 `retry: 1000` 重连并重新同步 snapshot），host 内存有界。 |
+| client | 输入串行队列（单请求 ≤32KB 分片、失败上报）、HTTP 10s 超时、全局 sessions SSE 单例、主题/resize 去抖、tabs/overlay a11y 增强；client 版本号由构建期 `__PLUGIN_VERSION__` 注入。 |
+| 版本 | `1.1.0`。 |

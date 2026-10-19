@@ -195,6 +195,18 @@ test('failed process completion publishes a failed state with the error message'
   await session.dispose()
 })
 
+test('output stream failure marks the session failed and terminates the process tree', async () => {
+  const handle = fakeHandle()
+  const session = makeSession(handle)
+  handle.output.destroy(new Error('pty read exploded'))
+  await session.whenExited
+  assert.equal(session.state, 'failed')
+  assert.equal(session.error, 'pty read exploded')
+  // The process tree must be killed so a failed session cannot leak an orphan shell.
+  assert.equal(handle.terminated, true)
+  await session.dispose()
+})
+
 test('waitReady returns after the shell output becomes quiet', async () => {
   const handle = fakeHandle()
   const session = makeSession(handle)

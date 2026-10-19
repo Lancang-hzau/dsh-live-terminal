@@ -32,6 +32,16 @@ export const styles = String.raw`
   flex: 1;
   min-width: 0;
 }
+.dshtp-title {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-primary, inherit);
+  font-size: 12px;
+  font-weight: 500;
+}
 .dshtp-btn {
   display: inline-flex;
   align-items: center;
@@ -140,14 +150,23 @@ export const styles = String.raw`
   flex: none;
   width: 16px;
   height: 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
   border-radius: 4px;
   color: var(--dsw-alias-label-tertiary, rgba(127, 127, 127, 0.9));
+  font: inherit;
   font-size: 13px;
   line-height: 1;
+  cursor: pointer;
+  outline: none;
 }
 .dshtp-tab-close:hover {
   background: var(--dsw-alias-interactive-bg-hover-danger, rgba(220, 60, 60, 0.16));
   color: var(--dsw-alias-state-error-primary, #e5484d);
+}
+.dshtp-tab-close:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--dsw-focus-ring-color, var(--dsw-alias-brand-primary, #4d6bfe));
 }
 .dshtp-dot {
   flex: none;

@@ -1,0 +1,10 @@
+# Keep line endings deterministic across Windows/Linux checkouts so the
+# committed `lib/client.js` bundle does not byte-drift from build output.
+* text=auto eol=lf
+
+# Generated bundle: always check out with LF (esbuild writes LF).
+lib/client.js text eol=lf
+
+# Binary assets must never be normalized.
+docs/screenshots/*.png binary
+*.svg -text

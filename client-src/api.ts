@@ -16,6 +16,13 @@ import type {
 
 export const API_PREFIX = '/dsh-terminal-panel'
 
+/**
+ * Per-request timeout. A wedged host (route not answering) would otherwise
+ * leave the panel stuck on its loading state forever; with this bound the
+ * existing error state (and its retry button) takes over.
+ */
+const REQUEST_TIMEOUT_MS = 10_000
+
 /** Error carrying the HTTP status so the panel can explain "host not ready". */
 export class ApiError extends Error {
   readonly status: number
@@ -221,6 +228,9 @@ async function requestJson(path: string, init?: RequestInit): Promise<unknown> {
   const response = await fetch(API_PREFIX + path, {
     credentials: 'same-origin',
     ...init,
+    // Honour caller-provided signals (e.g. abort on unmount); otherwise bound
+    // every request so a wedged host reaches the panel's retryable error state.
+    signal: init?.signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   })
   const text = await response.text()
   let payload: unknown
@@ -401,26 +411,78 @@ export interface SessionsStreamHandlers {
   onSessions: (payload: SessionInfo[] | SessionInfo) => void
 }
 
-/** Subscribe to the global `GET /events` session feed. Returns a disposer. */
+interface SessionsFeed {
+  source: EventSource
+  subscribers: Set<SessionsStreamHandlers>
+  /** Whether the shared EventSource is currently open (replayed to late subscribers). */
+  opened: boolean
+}
+
+/**
+ * One shared global `/events` connection for the whole page. Every panel
+ * instance, plus the auto-open watcher, subscribe to this feed: opening one
+ * EventSource per panel would multiply long-lived connections (and can hit the
+ * browser's per-origin connection cap on HTTP/1.1).
+ */
+let sessionsFeed: SessionsFeed | null = null
+
+/** Deliver to one subscriber without letting a throw starve the others. */
+function fanoutSessions(
+  subscribers: Set<SessionsStreamHandlers>,
+  dispatch: (handlers: SessionsStreamHandlers) => void,
+): void {
+  for (const handlers of Array.from(subscribers)) {
+    try {
+      dispatch(handlers)
+    } catch (error) {
+      console.warn('[dsh-terminal-panel] sessions SSE subscriber failed', error)
+    }
+  }
+}
+
+/** Subscribe to the shared global `GET /events` session feed. Returns a disposer. */
 export function openSessionsStream(handlers: SessionsStreamHandlers): () => void {
-  const source = new EventSource(`${API_PREFIX}/events`)
-  listenSse(source, 'sessions', (payload) => {
-    const parsed = parseSessionsPayload(payload)
-    if (parsed) handlers.onSessions(parsed)
-  })
-  source.addEventListener('open', () => {
-    try {
-      handlers.onOpen?.()
-    } catch (error) {
-      console.warn('[dsh-terminal-panel] sessions SSE open handler failed', error)
+  if (sessionsFeed === null) {
+    const subscribers = new Set<SessionsStreamHandlers>()
+    const source = new EventSource(`${API_PREFIX}/events`)
+    const feed: SessionsFeed = { source, subscribers, opened: false }
+    listenSse(source, 'sessions', (payload) => {
+      const parsed = parseSessionsPayload(payload)
+      if (!parsed) return
+      fanoutSessions(subscribers, (subscriber) => subscriber.onSessions(parsed))
+    })
+    source.addEventListener('open', () => {
+      feed.opened = true
+      fanoutSessions(subscribers, (subscriber) => subscriber.onOpen?.())
+    })
+    source.addEventListener('error', () => {
+      feed.opened = false
+      fanoutSessions(subscribers, (subscriber) => subscriber.onError?.())
+    })
+    sessionsFeed = feed
+  }
+  const feed = sessionsFeed
+  feed.subscribers.add(handlers)
+  // A late subscriber (e.g. a second panel) joins an already-open shared
+  // stream and would otherwise never observe the `open` event.
+  if (feed.opened) {
+    queueMicrotask(() => {
+      if (!feed.subscribers.has(handlers)) return
+      try {
+        handlers.onOpen?.()
+      } catch (error) {
+        console.warn('[dsh-terminal-panel] sessions SSE replay failed', error)
+      }
+    })
+  }
+  let disposed = false
+  return () => {
+    if (disposed) return
+    disposed = true
+    feed.subscribers.delete(handlers)
+    if (feed.subscribers.size === 0 && sessionsFeed === feed) {
+      feed.source.close()
+      sessionsFeed = null
     }
-  })
-  source.addEventListener('error', () => {
-    try {
-      handlers.onError?.()
-    } catch (error) {
-      console.warn('[dsh-terminal-panel] sessions SSE error handler failed', error)
-    }
-  })
-  return () => source.close()
+  }
 }

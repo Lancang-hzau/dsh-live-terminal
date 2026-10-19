@@ -20,6 +20,9 @@ function fakeRegistry(overrides = {}) {
     async createCommandSession(options) {
       calls.created.push(options)
       if (overrides.createThrows === true) throw new Error('spawn failed')
+      if (overrides.unresolvableHint !== undefined && options.shellKindHint === overrides.unresolvableHint) {
+        throw new Error(`dsh-terminal-panel: no usable shell found for shell kind ${options.shellKindHint} (bash: not found)`)
+      }
       return session
     },
     async waitForCommandSession(target, options) {
@@ -105,7 +108,31 @@ test('intercepts a foreground pwsh call and returns a built-in-shaped value', as
   assert.equal(registry.calls.created[0].cwd, 'C:\\work')
   assert.equal(registry.calls.created[0].agentId, 'agent-1')
   assert.equal(registry.calls.created[0].sessionId, 'session-1')
+  assert.equal(registry.calls.created[0].shellKindHint, 'pwsh')
   assert.equal(registry.calls.waited.length, 1)
+})
+
+test('passes the shell-kind hint matching the intercepted tool name', async () => {
+  const registry = fakeRegistry()
+  const { handler } = setup(registry)
+  await handler(execution(), () => assert.fail('next must not be called'))
+  await handler(
+    { ...execution(), name: 'bash', arguments: { command: 'echo hi' } },
+    () => assert.fail('next must not be called'),
+  )
+  assert.equal(registry.calls.created[0].shellKindHint, 'pwsh')
+  assert.equal(registry.calls.created[1].shellKindHint, 'bash')
+})
+
+test('falls back to next() when the hinted shell cannot be resolved', async () => {
+  const registry = fakeRegistry({ unresolvableHint: 'bash' })
+  const { handler, logger } = setup(registry)
+  const builtin = { value: { from: 'builtin' } }
+  const result = await handler({ ...execution(), name: 'bash', arguments: { command: 'echo hi' } }, () => builtin)
+  assert.equal(result, builtin)
+  assert.equal(registry.calls.created[0].shellKindHint, 'bash')
+  assert.deepEqual(registry.calls.closed, [])
+  assert.ok(logger.some((line) => line.includes('fell back')))
 })
 
 test('maps a timeout to exitCode null, SIGTERM and timedOut', async () => {

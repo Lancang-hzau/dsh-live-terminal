@@ -44,19 +44,31 @@ function fakeHandle() {
 
 /**
  * Subprocess double that records spawn specs and returns controllable handles.
+ * @param {{ available?: string[], failFirstSpawn?: boolean, spawnDelayMs?: number }} [options] behaviour overrides.
  * @returns {any} fake subprocess service.
  */
-function fakeProcessSubprocess() {
+function fakeProcessSubprocess(options = {}) {
   const spawned = []
+  let spawnFailures = options.failFirstSpawn === true ? 1 : 0
   return {
     spawned,
     async terminalEnvironment() {
       return { platform: 'windows', defaultShell: 'cmd.exe' }
     },
     async resolveExecutable(name) {
+      if (Array.isArray(options.available) && !options.available.includes(name)) {
+        throw new Error(`${name} not found`)
+      }
       return `C:\\resolved\\${name}.exe`
     },
     async spawnTerminal(spec) {
+      if (options.spawnDelayMs !== undefined) {
+        await new Promise((resolve) => setTimeout(resolve, options.spawnDelayMs))
+      }
+      if (spawnFailures > 0) {
+        spawnFailures -= 1
+        throw new Error('spawn boom')
+      }
       const handle = fakeHandle()
       spawned.push({ spec, handle })
       return handle
@@ -387,6 +399,176 @@ test('resolveRecentForAgent falls back to the agent interactive session', async 
     const agent = { id: 'agent-3', session: { id: 'session-3' } }
     const interactive = await registry.createInteractive({ agent, agentId: 'agent-3', owner: 'agent' })
     assert.equal(registry.resolveRecentForAgent(agent)?.id, interactive.id)
+  } finally {
+    await registry.dispose()
+  }
+})
+
+test('createCommandSession resolves the command shell per shellKindHint', async () => {
+  const subprocess = fakeProcessSubprocess()
+  const registry = processRegistry(subprocess)
+  try {
+    const bashSession = await registry.createCommandSession({ command: 'echo hi', cwd: 'C:\\work', shellKindHint: 'bash' })
+    const pwshSession = await registry.createCommandSession({ command: 'Write-Output hi', cwd: 'C:\\work' })
+    assert.equal(bashSession.kind, 'command')
+    assert.equal(pwshSession.kind, 'command')
+    assert.equal(subprocess.spawned[0].spec.argv[0], 'C:\\resolved\\bash.exe')
+    assert.deepEqual(subprocess.spawned[0].spec.argv.slice(1), ['-c', 'echo hi'])
+    assert.equal(subprocess.spawned[1].spec.argv[0], 'C:\\resolved\\pwsh.exe')
+  } finally {
+    await registry.dispose()
+  }
+})
+
+test('shell resolution is cached separately per shell-kind hint', async () => {
+  const subprocess = fakeProcessSubprocess()
+  const resolved = []
+  const resolveExecutable = subprocess.resolveExecutable.bind(subprocess)
+  subprocess.resolveExecutable = async (name, ...rest) => {
+    resolved.push(name)
+    return resolveExecutable(name, ...rest)
+  }
+  const registry = processRegistry(subprocess)
+  try {
+    await registry.createCommandSession({ command: 'one', cwd: 'C:\\work', shellKindHint: 'bash' })
+    await registry.createCommandSession({ command: 'two', cwd: 'C:\\work', shellKindHint: 'bash' })
+    await registry.createCommandSession({ command: 'three', cwd: 'C:\\work' })
+    // The bash hint resolves bash once; the hint-less path still resolves pwsh once.
+    assert.deepEqual(resolved, ['bash', 'pwsh'])
+  } finally {
+    await registry.dispose()
+  }
+})
+
+test('createCommandSession rejects when the hinted shell is unavailable and keeps capacity usable', async () => {
+  const subprocess = fakeProcessSubprocess({ available: ['pwsh', 'powershell'] })
+  const registry = processRegistry(subprocess, { maxSessions: 1 })
+  try {
+    await assert.rejects(
+      () => registry.createCommandSession({ command: 'echo hi', cwd: 'C:\\work', shellKindHint: 'bash' }),
+      /no usable shell found for shell kind bash/,
+    )
+    assert.equal(subprocess.spawned.length, 0)
+    assert.equal(registry.size, 0)
+    const session = await registry.createCommandSession({ command: 'Write-Output hi', cwd: 'C:\\work' })
+    assert.equal(registry.size, 1)
+    assert.equal(registry.lookup(session.id)?.id, session.id)
+  } finally {
+    await registry.dispose()
+  }
+})
+
+test('maxSessions is atomic when creations run concurrently', async () => {
+  const subprocess = fakeProcessSubprocess({ spawnDelayMs: 40 })
+  const registry = processRegistry(subprocess, { maxSessions: 1 })
+  try {
+    const results = await Promise.allSettled([
+      registry.createInteractive({ cwd: 'C:\\work' }),
+      registry.createInteractive({ cwd: 'C:\\work' }),
+    ])
+    const fulfilled = results.filter((result) => result.status === 'fulfilled')
+    const rejected = results.filter((result) => result.status === 'rejected')
+    assert.equal(fulfilled.length, 1)
+    assert.equal(rejected.length, 1)
+    assert.match(String(rejected[0].reason?.message ?? rejected[0].reason), /limit/)
+    assert.equal(registry.size, 1)
+  } finally {
+    await registry.dispose()
+  }
+})
+
+test('a failed spawn releases the reserved capacity slot', async () => {
+  const subprocess = fakeProcessSubprocess({ failFirstSpawn: true })
+  const registry = processRegistry(subprocess, { maxSessions: 1 })
+  try {
+    await assert.rejects(() => registry.createInteractive({ cwd: 'C:\\work' }), /spawn boom/)
+    assert.equal(registry.size, 0)
+    const session = await registry.createInteractive({ cwd: 'C:\\work' })
+    assert.equal(registry.size, 1)
+    assert.equal(registry.lookup(session.id)?.id, session.id)
+  } finally {
+    await registry.dispose()
+  }
+})
+
+test('capacity pressure closes exited sessions before reclaiming live agent terminals', async () => {
+  const subprocess = fakeProcessSubprocess()
+  const registry = processRegistry(subprocess, { maxSessions: 2 })
+  try {
+    const agent = { id: 'agent-1', session: { id: 'session-1' } }
+    const defaultTerminal = await registry.ensureAgentTerminal(agent)
+    const command = await registry.createCommandSession({ command: 'exit', agent, agentId: 'agent-1' })
+    const commandHandle = subprocess.spawned[1].handle
+    commandHandle.finish({ exitCode: 0, signal: null })
+    await waitFor(() => command.state === 'exited')
+    const extra = await registry.createInteractive({ agent, agentId: 'agent-1', owner: 'agent' })
+    assert.equal(registry.lookup(command.id), undefined, 'exited session must be reclaimed first')
+    assert.equal(registry.lookup(defaultTerminal.id)?.id, defaultTerminal.id)
+    assert.equal(registry.lookup(extra.id)?.id, extra.id)
+    assert.equal(registry.size, 2)
+  } finally {
+    await registry.dispose()
+  }
+})
+
+test('capacity pressure reclaims agent-owned non-default interactive sessions but keeps user terminals', async () => {
+  const subprocess = fakeProcessSubprocess()
+  const registry = processRegistry(subprocess, { maxSessions: 2 })
+  try {
+    const agent = { id: 'agent-1', session: { id: 'session-1' } }
+    const user = await registry.createInteractive({ cwd: 'C:\\work', owner: 'user' })
+    const extra = await registry.createInteractive({ agent, agentId: 'agent-1', owner: 'agent' })
+    const fresh = await registry.createInteractive({ agent, agentId: 'agent-1', owner: 'agent' })
+    assert.equal(registry.lookup(user.id)?.id, user.id, 'user terminals must never be reclaimed')
+    assert.equal(registry.lookup(extra.id), undefined, 'the oldest agent extra terminal is reclaimed')
+    assert.equal(registry.lookup(fresh.id)?.id, fresh.id)
+    assert.equal(registry.size, 2)
+  } finally {
+    await registry.dispose()
+  }
+})
+
+test('capacity pressure never reclaims the agent default interactive terminal', async () => {
+  const subprocess = fakeProcessSubprocess()
+  const registry = processRegistry(subprocess, { maxSessions: 2 })
+  try {
+    const agent = { id: 'agent-1', session: { id: 'session-1' } }
+    const defaultTerminal = await registry.ensureAgentTerminal(agent)
+    const user = await registry.createInteractive({ cwd: 'C:\\work', owner: 'user' })
+    await assert.rejects(
+      () => registry.createInteractive({ agent, agentId: 'agent-1', owner: 'agent' }),
+      /limit/,
+    )
+    assert.equal(registry.lookup(defaultTerminal.id)?.id, defaultTerminal.id)
+    assert.equal(registry.lookup(user.id)?.id, user.id)
+    assert.equal(registry.size, 2)
+  } finally {
+    await registry.dispose()
+  }
+})
+
+test('capacity pressure during agent-terminal startup keeps the starting default terminal', async () => {
+  const subprocess = fakeProcessSubprocess()
+  const registry = processRegistry(subprocess, { maxSessions: 2 })
+  try {
+    const agent = { id: 'agent-1', session: { id: 'session-1' } }
+    // Spawned but still inside ensureAgentTerminal's waitReady quiet window:
+    // the terminal must be protected from reclamation without being published
+    // as the agent's default before it is ready.
+    const starting = registry.ensureAgentTerminal(agent)
+    await waitFor(() => registry.size === 1)
+    assert.equal(registry.resolveForAgent(agent), undefined, 'a starting default terminal must not be published yet')
+    const user = await registry.createInteractive({ cwd: 'C:\\work', owner: 'user' })
+    await assert.rejects(
+      () => registry.createInteractive({ cwd: 'C:\\work', owner: 'user' }),
+      /limit/,
+      'user terminals are not reclaimable, so pressure must fail instead of closing the starting default terminal',
+    )
+    const defaultTerminal = await starting
+    assert.equal(registry.lookup(defaultTerminal.id)?.id, defaultTerminal.id)
+    assert.equal(registry.resolveForAgent(agent)?.id, defaultTerminal.id)
+    assert.equal(registry.lookup(user.id)?.id, user.id)
+    assert.equal(registry.size, 2)
   } finally {
     await registry.dispose()
   }

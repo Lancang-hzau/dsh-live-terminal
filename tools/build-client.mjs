@@ -70,6 +70,13 @@ function formatBytes(bytes) {
 
 async function main() {
   const startedAt = Date.now()
+  // The client reports its version through `__DSH_TERMINAL_PANEL_CLIENT__`;
+  // inject it from package.json at build time so it can never drift.
+  const packageJson = JSON.parse(await readFile(join(packageDir, 'package.json'), 'utf8'))
+  const version = packageJson.version
+  if (typeof version !== 'string' || version === '') {
+    throw new Error('package.json version is missing')
+  }
   const result = await build({
     entryPoints: [entryPoint],
     absWorkingDir: repoRoot,
@@ -87,6 +94,7 @@ async function main() {
     loader: { '.css': 'text' },
     define: {
       'process.env.NODE_ENV': JSON.stringify(minify ? 'production' : 'development'),
+      __PLUGIN_VERSION__: JSON.stringify(version),
     },
     external: EXTERNALS,
   })
@@ -143,6 +151,7 @@ ${indent(bundle.trimEnd(), 4)}
     `[build-client] wrote ${relativeOutput} (${formatBytes(bytes)}, gzip ${formatBytes(gzipped)}) in ${Date.now() - startedAt}ms${minify ? '' : ' [no-minify]'}`,
   )
   console.log(`[build-client] externals: ${EXTERNALS.join(', ')}`)
+  console.log(`[build-client] version: ${version}`)
   console.log(`[build-client] esbuild: ${requireFromRoot('esbuild/package.json').version}`)
 }
 

@@ -38,6 +38,7 @@ function sessionInfo(id, kind, overrides = {}) {
 function fakeSession(id, kind) {
   const info = sessionInfo(id, kind)
   const state = { written: [], snapshots: 0 }
+  const exit = Promise.withResolvers()
   return {
     id,
     title: info.title,
@@ -46,6 +47,8 @@ function fakeSession(id, kind) {
     cols: info.cols,
     rows: info.rows,
     info,
+    whenExited: exit.promise,
+    _exit: exit,
     _state: state,
     async waitReady() {},
     async write(data) {
@@ -142,10 +145,19 @@ function setup(registry, configOverrides = {}) {
   const plugin = {
     config: { interceptShellTools: true, commandTimeoutMs: 180_000, maxOutputBytes: 262_144, ...configOverrides },
     registry,
-    logger: { warn() {} },
+    logger: {
+      infos: [],
+      warns: [],
+      info(message) {
+        this.infos.push(message)
+      },
+      warn(message) {
+        this.warns.push(message)
+      },
+    },
   }
   registerTools(ctx, plugin)
-  return { definitions, plugin }
+  return { definitions, plugin, logger: plugin.logger }
 }
 
 /**
@@ -223,6 +235,7 @@ test('live_terminal_run creates a dedicated command session and returns its id',
   assert.equal(registry.calls.created[0].command, 'Get-ChildItem')
   assert.equal(registry.calls.created[0].agentId, 'agent-1')
   assert.equal(registry.calls.ensured, 0, 'must not touch the interactive terminal')
+  assert.equal(registry.calls.waited.length, 1, 'wait:true goes through waitForCommandSession')
   assert.match(text, /^\[terminal command-1\]/)
   assert.ok(text.includes('command output'))
 })
@@ -236,15 +249,37 @@ test('live_terminal_run render always exposes the terminalId for screenshot foll
   }
 })
 
-test('live_terminal_run with wait:false returns immediately with stillRunning', async () => {
-  const { definitions } = setup(fakeRegistry())
+test('live_terminal_run with wait:false returns immediately without enforcing the timeout', async () => {
+  const registry = fakeRegistry()
+  const { definitions, logger } = setup(registry)
   const { value, text } = await runTool(definitions, 'live_terminal_run', { command: 'Start-Sleep 5', wait: false })
+  // waitForCommandSession enforces timeoutMs by terminating the PTY, so a
+  // background command must never go through it (otherwise it is killed after
+  // the default 180s with no notification).
+  assert.equal(registry.calls.waited.length, 0, 'waitForCommandSession must not be called for wait:false')
   assert.equal(value.stillRunning, true)
   assert.equal(value.output, '')
   assert.equal(value.exitCode, null)
   assert.equal(value.terminalId, 'command-1')
   assert.ok(text.includes('still running'))
+  assert.ok(text.includes('keeps running until it exits or the terminal is closed'))
   assert.ok(text.includes('command-1'))
+
+  // The session exit is still observed and logged.
+  registry.command._exit.resolve({ exitCode: 0, signal: null })
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(logger.infos.length, 1)
+  assert.match(logger.infos[0], /background command command-1 exited \(exitCode=0\)/)
+})
+
+test('live_terminal_run with wait:false logs a background command failure', async () => {
+  const registry = fakeRegistry()
+  const { definitions, logger } = setup(registry)
+  await runTool(definitions, 'live_terminal_run', { command: 'boom', wait: false })
+  assert.equal(registry.calls.waited.length, 0)
+  registry.command._exit.reject(new Error('pty exploded'))
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.ok(logger.warns.some((line) => line.includes('background command command-1 failed: pty exploded')))
 })
 
 test('live_terminal_run maps timeout and abort outcomes', async () => {

@@ -91,6 +91,45 @@ test('resolveShell rejects when no candidate resolves', async () => {
   await assert.rejects(() => resolveShell({ subprocess: fakeSubprocess([]) }), /no usable shell found/)
 })
 
+test('shellCandidates tries hint-specific executables first', () => {
+  assert.deepEqual(shellCandidates('windows', undefined, 'C:\\Windows\\System32\\cmd.exe', 'bash'), [
+    'bash',
+    'pwsh',
+    'powershell',
+    'C:\\Windows\\System32\\cmd.exe',
+    'cmd.exe',
+  ])
+  assert.deepEqual(shellCandidates('windows', undefined, undefined, 'pwsh'), ['pwsh', 'powershell', 'cmd.exe'])
+  assert.deepEqual(shellCandidates('posix', undefined, '/bin/zsh', 'bash'), ['bash', '/bin/zsh'])
+  // A configured shellPath stays authoritative; the hint only validates it later.
+  assert.deepEqual(shellCandidates('windows', 'C:\\custom\\bash.exe', undefined, 'bash'), ['C:\\custom\\bash.exe'])
+})
+
+test('resolveShell with a bash hint never returns a PowerShell/cmd shell', async () => {
+  await assert.rejects(
+    () => resolveShell({ subprocess: fakeSubprocess(['pwsh', 'powershell']), kindHint: 'bash' }),
+    /no usable shell found for shell kind bash/,
+  )
+})
+
+test('resolveShell with a bash hint succeeds when bash is available', async () => {
+  const shell = await resolveShell({ subprocess: fakeSubprocess(['bash']), kindHint: 'bash' })
+  assert.equal(shell.kind, 'bash')
+  assert.equal(shell.path, 'C:\\resolved\\bash.exe')
+})
+
+test('resolveShell with a pwsh hint accepts Windows PowerShell', async () => {
+  const shell = await resolveShell({ subprocess: fakeSubprocess(['powershell']), kindHint: 'pwsh' })
+  assert.equal(shell.kind, 'powershell')
+})
+
+test('resolveShell validates a configured shellPath against the hint', async () => {
+  await assert.rejects(
+    () => resolveShell({ subprocess: fakeSubprocess(['pwsh']), shellPath: 'pwsh', kindHint: 'bash' }),
+    /could not be resolved for shell kind bash/,
+  )
+})
+
 test('resolveShell rejects without a subprocess service', async () => {
   await assert.rejects(() => resolveShell({ subprocess: undefined }), /subprocess service is unavailable/)
 })

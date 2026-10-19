@@ -71,7 +71,7 @@ dsh plugin --profile web add dsh-live-terminal
     scrollback: 2000            # 每个终端的回滚行数
     maxOutputBytes: 262144      # 单次工具结果输出上限
     maxSessions: 16             # 同时保留的终端会话上限
-    commandTimeoutMs: 180000    # 被接管命令的默认超时
+    commandTimeoutMs: 180000    # live_terminal_run(wait:true) 的默认等待超时（live_terminal_open 仅做启动等待）；被接管的 pwsh 前台调用固定 120s 上限
     retainExited: 10            # 保留多少个已退出命令会话用于回看
 ```
 
@@ -79,7 +79,7 @@ dsh plugin --profile web add dsh-live-terminal
 
 ## 兼容性
 
-- DSH **0.2.1-rc.2**（`engines.dsh: >=0.2.0-rc.2`；`dsh.compatibility.dshReleases` 声明 0.2.1-rc.2 兼容）。
+- DSH **0.2.1-rc.2**（`engines.dsh: >=0.2.1-rc.2 <0.3.0-0`；`dsh.compatibility.dshReleases` 声明 0.2.1-rc.2 兼容）。
 - Windows 10/11（PowerShell / cmd / Git Bash）与 POSIX（bash）。
 - 运行时依赖：`@xterm/headless`、`@xterm/addon-serialize`（安装时自动安装，纯 JS）。
 
@@ -94,9 +94,22 @@ dsh plugin --profile web add dsh-live-terminal
 
 - 终端会话只存在于 Host 进程内，DSH 重启不会恢复。
 - 被接管命令的 stdout/stderr 在 PTY 中合并（结果仍符合内置工具 schema）。
+- `wait:false` 的后台命令不再被默认超时自动终止，需要用户手动关闭或等其自行结束。
 - 截图是文本屏幕快照，不是 PNG 图片。
 - DSH 升级到新 minor 版本后可能需要适配插件 API（`tools/execute` 拦截、client 模块基座）。
 - 极端情况下（UI 新建终端 → 页面刷新重连 → 关闭），Windows 上可能短暂残留一个 PowerShell/OpenConsole 子进程；重启 DSH 会清理，后续版本跟进。
+
+## v1.1 变更
+
+- **shell 拦截按工具方言选择 shell**：`bash` 方言不再落到 pwsh；方言解析/启动失败时回退 `next()`，保持原生工具行为。
+- **输出流失败终止进程树**：PTY 输出流异常时 terminate 整个进程树，避免孤儿进程与悬挂会话。
+- **`maxSessions` 并发原子化**：容量占位/回收在并发创建下仍严格不超上限。
+- **agent 交互终端容量回收**：超出容量时回收最旧的 agent 交互终端；`startingDefaults` 保护启动中的默认终端不被误回收。
+- **`wait:false` 语义**：`live_terminal_run(wait:false)` 的后台命令不再受默认超时自动终止。
+- **SSE 背压上限**：每条 SSE 连接缓冲上限 4MiB，超出时断开该慢客户端连接（EventSource 按 `retry: 1000` 重连并重新同步 snapshot），保护 host 内存。
+- **插件激活修复**：`apply()` 在 `subprocess`/`workingDirectory` 已就绪（direct 分支）时不再抛出 `TypeError`。
+- **客户端增强**：输入串行队列（32KB 分片 + 失败提示）、HTTP 10s 超时、全局 sessions SSE 单例、主题/resize 去抖、tabs/overlay a11y（键盘导航/aria）。
+- 版本 **1.1.0**（client 版本号由构建期注入，与 package.json 一致）。
 
 ## 为什么自研
 
@@ -127,7 +140,7 @@ screenshots.json     市场截图清单
 ```powershell
 npm install                          # 安装构建/测试依赖
 npm run build                        # 构建 client-src → lib/client.js
-npm test                             # host 单元测试（116 cases）
+npm test                             # host 单元测试（158 cases）
 npm run typecheck
 
 # 独立 dev host（不影响正在运行的 Desktop DSH）
@@ -135,7 +148,7 @@ npm run typecheck
 # 用日志里的带 token URL 打开页面；右侧栏快捷键：Ctrl+Shift+B
 ```
 
-本机验收（2026-10-19）：host 单测 116/116 PASS；独立 e2e（真实 Chrome）44 PASS / 0 FAIL / 1 SKIP；真实 agent 手动项（命令拦截可见、自动弹出、`live_terminal_run` + `live_terminal_screenshot`、cwd）全部 PASS；Desktop 实机安装并重启后验证通过。详见 [`docs/test-report.md`](./docs/test-report.md)。
+本机验收（2026-10-19）：host 单测 158/158 PASS；独立 e2e（真实 Chrome）44 PASS / 0 FAIL / 1 SKIP（v1.0 验收数字）；真实 agent 手动项（命令拦截可见、自动弹出、`live_terminal_run` + `live_terminal_screenshot`、cwd）全部 PASS；Desktop 实机安装并重启后验证通过。v1.1 复核数字（host 单测 158/158、e2e、浏览器探针）见 [`docs/test-report.md`](./docs/test-report.md) 的「v1.1 验证补充」。
 
 ### 发布
 

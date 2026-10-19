@@ -286,3 +286,22 @@ node tools/qa-e2e.mjs --slow --host-log=qa/artifacts/devhost-3105-final2.log "<t
   - 普通 `pwsh` 调用被接管：`live_terminal_list` 出现 `[command/agent] exited exit=0` 会话（标题=命令、cwd=D:\DSH，符合要求 B）。
   - `live_terminal_run` 返回 `[terminal <id>] ... (exit 0)` + 干净输出；随后 `live_terminal_screenshot` 返回 `[terminal <title> 99x49 cursor (0,5) exited]` + 屏幕文本（符合要求 C）。
 - 结论：**E-11 PASS**（Desktop 实机安装 + 重启后 host/client 均生效）。至此 §9 清单除 E-11 更新为 PASS 外无变化；O-4 仍为非阻断 P3。
+
+---
+
+## 12. v1.1 验证补充（2026-10-19）
+
+> 本节记录 v1.1 的独立验证数字。与正文历史章节（v1.0 验收）冲突时**以本节为准**；旧章节保留作历史记录，不做逐处改写。
+
+| 项 | v1.1 结果 |
+|---|---|
+| host 单元测试 | **158/158 PASS**（`npm test`，`tests/*.test.mjs`；133 v1.1 + apply 7 + routes 17 + tools 1） |
+| TypeScript | `npm run typecheck` **0 error** |
+| 官方构建产物 | `lib/client.js` **396,639 B / gzip 101.5 KiB**（client v1.1 改动后；版本号构建期注入，bundle 内 `version:"1.1.0"`，构建确定性 sha 稳定） |
+| 真实 dev host e2e | **21 PASS / 0 FAIL / 1 SKIP**（P0 修复后复跑确认） |
+| mock e2e | **24 PASS / 0 FAIL / 1 SKIP**（P0 修复后复跑 4 次，其中 1 次首跑 resize 断言受 headless rAF 时序偶发影响，重跑不复现） |
+| v1.1 专项浏览器探针 | **15/15 PASS** |
+| P0 修复独立探针 | apply direct/deferred **19/19**、SSE 背压/有界/drain **16/16**、`wait:false` 不 kill **12/12** PASS |
+| 独立验证 | 三轮：v1.1 两轮（发现并修复“启动窗口期默认交互终端被容量回收”边界，修复后复验 **PASS×3**）；P0+版本/文档轮 9 项中代码/测试/构建/契约全 PASS，文档 4 处不一致已修正 |
+
+- 结论：v1.1 达到发布门槛（host 单测 / typecheck / 构建 / e2e / 浏览器探针全绿）；剩余 O-3、O-4 为非阻断观察项，不影响发布。

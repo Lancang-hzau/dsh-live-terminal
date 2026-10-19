@@ -1,4 +1,4 @@
-﻿/**
+/**
  * The xterm.js screen for one PTY session.
  *
  * Lifecycle:
@@ -13,6 +13,7 @@
 
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { Terminal } from '@xterm/xterm'
+import type { ITheme } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 
 import { fetchSnapshot, openSessionStream, sendInput, resizeSession } from './api'
@@ -39,6 +40,10 @@ export interface TerminalViewProps {
   onInfo?: (patch: SessionInfo | SessionInfoPatch) => void
   onExit?: (exit: ExitFrame) => void
   onError?: (message: string | null) => void
+  /** Reports a failed input POST; the Panel surfaces it as a toast. */
+  onInputError?: (message: string) => void
+  /** User touched the screen (typing/pointer): lets the Panel pin the selection. */
+  onUserActivity?: () => void
   onController?: (controller: TerminalController | null) => void
 }
 
@@ -50,6 +55,44 @@ interface PendingChunk {
 const SNAPSHOT_FALLBACK_MS = 1500
 const FORCE_FLUSH_MS = 4000
 const PENDING_LIMIT = 4000
+/** The host rejects `/input` bodies above 64KB; stay well below it. */
+const INPUT_CHUNK_BYTES = 32 * 1024
+/** Hard cap for the pending input queue; beyond this we drop and report. */
+const INPUT_QUEUE_LIMIT = 1024 * 1024
+/** Coalesce fit-driven resize POSTs while the sidebar is being dragged. */
+const RESIZE_DEBOUNCE_MS = 120
+
+const textEncoder = new TextEncoder()
+const textDecoder = new TextDecoder()
+
+/** Split `text` into a UTF-8-safe prefix of at most `maxBytes` bytes. */
+function splitByUtf8Bytes(text: string, maxBytes: number): [string, string] {
+  if (text === '') return ['', '']
+  const bytes = textEncoder.encode(text)
+  if (bytes.byteLength <= maxBytes) return [text, '']
+  let end = maxBytes
+  // Do not cut a multi-byte code point: a continuation byte (10xxxxxx) means
+  // the prefix would end mid-character.
+  while (end > 0 && (bytes[end] & 0xc0) === 0x80) end -= 1
+  return [textDecoder.decode(bytes.subarray(0, end)), textDecoder.decode(bytes.subarray(end))]
+}
+
+function describeError(error: unknown): string {
+  if (error instanceof Error) return error.message
+  return String(error)
+}
+
+/** Shallow compare of two xterm themes so unchanged tokens cause no repaint. */
+function sameTheme(left: ITheme | undefined, right: ITheme): boolean {
+  if (left === undefined) return false
+  const leftRecord = left as Record<string, unknown>
+  const rightRecord = right as Record<string, unknown>
+  const keys = new Set([...Object.keys(leftRecord), ...Object.keys(rightRecord)])
+  for (const key of keys) {
+    if (leftRecord[key] !== rightRecord[key]) return false
+  }
+  return true
+}
 
 /** Text of the visible viewport, matching the host's `visibleText()` helper. */
 function visibleText(terminal: Terminal): string {
@@ -78,6 +121,7 @@ export function TerminalView(props: TerminalViewProps) {
   const pendingRef = useRef<PendingChunk[]>([])
   const lastSeqRef = useRef(-1)
   const lastInfoRef = useRef<SessionInfoPatch | null>(null)
+  const inputQueueRef = useRef({ pending: '', busy: false })
 
   /* ---------------------------------------------------------------- */
   /* Terminal instance                                                 */
@@ -107,20 +151,55 @@ export function TerminalView(props: TerminalViewProps) {
     pendingRef.current = []
     lastSeqRef.current = -1
     lastInfoRef.current = null
+    inputQueueRef.current = { pending: '', busy: false }
+
+    let disposed = false
+    const inputQueue = inputQueueRef.current
+
+    // Serialise user input: xterm emits one `onData` per keystroke and fetch
+    // requests carry no ordering guarantee, so sends are queued and flushed one
+    // at a time (≤32KB per POST, the host rejects bodies above 64KB).
+    const flushInput = (): void => {
+      if (disposed || inputQueue.busy || inputQueue.pending === '') return
+      const [chunk, rest] = splitByUtf8Bytes(inputQueue.pending, INPUT_CHUNK_BYTES)
+      if (chunk === '') return
+      inputQueue.pending = rest
+      inputQueue.busy = true
+      void sendInput(sessionId, chunk)
+        .catch((error: unknown) => {
+          callbacksRef.current.onInputError?.(describeError(error))
+        })
+        .finally(() => {
+          inputQueue.busy = false
+          flushInput()
+        })
+    }
 
     const dataSubscription = terminal.onData((data) => {
-      void sendInput(sessionId, data).catch(() => {
-        // The connection overlay / status line owns user-visible errors.
-      })
+      callbacksRef.current.onUserActivity?.()
+      if (data === '') return
+      inputQueue.pending += data
+      if (inputQueue.pending.length > INPUT_QUEUE_LIMIT) {
+        inputQueue.pending = ''
+        callbacksRef.current.onInputError?.('input queue overflow')
+        return
+      }
+      queueMicrotask(flushInput)
     })
+
+    let resizeTimer = 0
     const resizeSubscription = terminal.onResize(({ cols, rows }) => {
       if (suppressResizeRef.current) return
       const posted = postedSizeRef.current
       if (posted.cols === cols && posted.rows === rows) return
       postedSizeRef.current = { cols, rows }
-      void resizeSession(sessionId, cols, rows).catch(() => {
-        // Resize failures are recoverable; the next fit retries.
-      })
+      window.clearTimeout(resizeTimer)
+      resizeTimer = window.setTimeout(() => {
+        void resizeSession(sessionId, cols, rows).catch(() => {
+          // Reset the marker so the next fit retries the same dimensions.
+          postedSizeRef.current = { cols: 0, rows: 0 }
+        })
+      }, RESIZE_DEBOUNCE_MS)
     })
 
     const doFit = (): void => {
@@ -152,7 +231,11 @@ export function TerminalView(props: TerminalViewProps) {
       const current = terminalRef.current
       if (!current) return
       const next = readTerminalTheme()
-      current.options.theme = next.xterm
+      // Avoid an unconditional theme assignment: xterm treats a new theme
+      // object as a full repaint even when every token is unchanged.
+      if (!sameTheme(current.options.theme, next.xterm)) {
+        current.options.theme = next.xterm
+      }
       let fontChanged = false
       if (current.options.fontFamily !== next.fontFamily) {
         current.options.fontFamily = next.fontFamily
@@ -174,7 +257,10 @@ export function TerminalView(props: TerminalViewProps) {
     })
 
     return () => {
+      disposed = true
+      inputQueue.pending = ''
       window.clearTimeout(initialTimer)
+      window.clearTimeout(resizeTimer)
       if (frame !== 0) cancelAnimationFrame(frame)
       observer.disconnect()
       stopThemeObserver()
@@ -312,5 +398,12 @@ export function TerminalView(props: TerminalViewProps) {
     }
   }, [sessionId, reconnectToken])
 
-  return <div className="dshtp-screen" ref={hostRef} data-dsh-tp-screen />
+  return (
+    <div
+      className="dshtp-screen"
+      ref={hostRef}
+      data-dsh-tp-screen
+      onPointerDown={() => callbacksRef.current.onUserActivity?.()}
+    />
+  )
 }

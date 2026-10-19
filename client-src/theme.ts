@@ -2,10 +2,14 @@
  * xterm theme derived from the DSH design tokens (`--dsw-*` CSS variables).
  *
  * The GUI only guarantees that the tokens exist on some ancestor of the
- * sidebar; values are resolved through a hidden probe element so `var(...)`
+ * sidebar; values are resolved through one hidden probe element so `var(...)`
  * chains are flattened before they reach xterm (canvas fonts cannot resolve
  * CSS variables). Falls back to a neutral dark palette when the tokens are
  * missing (e.g. while the GUI boots).
+ *
+ * Both the probe element and the theme MutationObserver are process-wide:
+ * every TerminalView instance reads through the same probe and shares one
+ * debounced observer instead of creating its own DOM node/observer.
  */
 
 import type { ITheme } from '@xterm/xterm'
@@ -24,19 +28,35 @@ const FALLBACK_FONT =
 
 const FONT_SIZE = 12
 
-function probeElement(): HTMLDivElement | null {
+/** Coalesce bursts of theme mutations (CSS-variable writes, class flips). */
+const THEME_DEBOUNCE_MS = 100
+
+/* ------------------------------------------------------------------ */
+/* Shared hidden probe                                                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * One hidden probe reused for every token lookup. Appending/removing a probe
+ * per color forced a document style recalc each time and churned the DOM; the
+ * element is kept attached and re-created only if the body was replaced.
+ */
+let probeElement: HTMLDivElement | null = null
+
+function ensureProbe(): HTMLDivElement | null {
   if (typeof document === 'undefined' || !document.body) return null
-  const probe = document.createElement('div')
-  probe.setAttribute('aria-hidden', 'true')
-  probe.style.position = 'absolute'
-  probe.style.top = '-9999px'
-  probe.style.left = '-9999px'
-  probe.style.visibility = 'hidden'
-  probe.style.pointerEvents = 'none'
-  probe.style.width = '0'
-  probe.style.height = '0'
-  document.body.appendChild(probe)
-  return probe
+  if (probeElement !== null && probeElement.isConnected) return probeElement
+  const element = document.createElement('div')
+  element.setAttribute('aria-hidden', 'true')
+  element.style.position = 'absolute'
+  element.style.top = '-9999px'
+  element.style.left = '-9999px'
+  element.style.visibility = 'hidden'
+  element.style.pointerEvents = 'none'
+  element.style.width = '0'
+  element.style.height = '0'
+  document.body.appendChild(element)
+  probeElement = element
+  return element
 }
 
 function resolveColor(
@@ -44,31 +64,23 @@ function resolveColor(
   fallback: string,
   target: 'color' | 'backgroundColor' = 'color',
 ): string {
-  const probe = probeElement()
+  const probe = ensureProbe()
   if (!probe) return fallback
-  try {
-    if (target === 'color') probe.style.color = `var(${variable}, ${fallback})`
-    else probe.style.backgroundColor = `var(${variable}, ${fallback})`
-    const computed = getComputedStyle(probe)
-    const value = (target === 'color' ? computed.color : computed.backgroundColor).trim()
-    if (value === '') return fallback
-    if (target === 'backgroundColor' && isTransparent(value)) return fallback
-    return value
-  } finally {
-    probe.remove()
-  }
+  if (target === 'color') probe.style.color = `var(${variable}, ${fallback})`
+  else probe.style.backgroundColor = `var(${variable}, ${fallback})`
+  const computed = getComputedStyle(probe)
+  const value = (target === 'color' ? computed.color : computed.backgroundColor).trim()
+  if (value === '') return fallback
+  if (target === 'backgroundColor' && isTransparent(value)) return fallback
+  return value
 }
 
 function resolveFontFamily(variable: string, fallback: string): string {
-  const probe = probeElement()
+  const probe = ensureProbe()
   if (!probe) return fallback
-  try {
-    probe.style.fontFamily = `var(${variable}, ${fallback})`
-    const value = getComputedStyle(probe).fontFamily.trim()
-    return value === '' ? fallback : value
-  } finally {
-    probe.remove()
-  }
+  probe.style.fontFamily = `var(${variable}, ${fallback})`
+  const value = getComputedStyle(probe).fontFamily.trim()
+  return value === '' ? fallback : value
 }
 
 /**
@@ -98,6 +110,10 @@ function isTransparent(color: string): boolean {
     normalized === 'rgb(0,0,0,0)'
   )
 }
+
+/* ------------------------------------------------------------------ */
+/* Color math                                                          */
+/* ------------------------------------------------------------------ */
 
 interface Rgba {
   r: number
@@ -218,27 +234,83 @@ export function readTerminalTheme(): TerminalTheme {
   }
 }
 
-/** Observe theme flips (`body[data-ds-dark-theme]` and token mutations). */
-export function observeTheme(listener: () => void): () => void {
-  if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') {
-    return () => {}
+/* ------------------------------------------------------------------ */
+/* Shared, debounced theme observer                                    */
+/* ------------------------------------------------------------------ */
+
+type ThemeListener = () => void
+
+const themeListeners = new Set<ThemeListener>()
+let mutationObserver: MutationObserver | null = null
+let mediaQueryList: MediaQueryList | null = null
+let debounceTimer: number | undefined
+
+function notifyThemeListeners(): void {
+  for (const listener of Array.from(themeListeners)) {
+    try {
+      listener()
+    } catch (error) {
+      console.warn('[dsh-terminal-panel] theme listener failed', error)
+    }
   }
-  const observer = new MutationObserver(() => listener())
+}
+
+function scheduleThemeNotify(): void {
+  if (typeof window === 'undefined') {
+    notifyThemeListeners()
+    return
+  }
+  if (debounceTimer !== undefined) return
+  debounceTimer = window.setTimeout(() => {
+    debounceTimer = undefined
+    notifyThemeListeners()
+  }, THEME_DEBOUNCE_MS)
+}
+
+function startThemeObservation(): void {
+  if (typeof MutationObserver === 'undefined') return
+  const observer = new MutationObserver(scheduleThemeNotify)
   const options: MutationObserverInit = {
     attributes: true,
     attributeFilter: ['class', 'style', 'data-ds-dark-theme'],
   }
   if (document.body) observer.observe(document.body, options)
   if (document.documentElement) observer.observe(document.documentElement, options)
-  const media =
-    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-      ? window.matchMedia('(prefers-color-scheme: dark)')
-      : undefined
-  const onMediaChange = (): void => listener()
-  media?.addEventListener?.('change', onMediaChange)
+  mutationObserver = observer
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    mediaQueryList = window.matchMedia('(prefers-color-scheme: dark)')
+    mediaQueryList.addEventListener?.('change', scheduleThemeNotify)
+  }
+}
+
+function stopThemeObservation(): void {
+  mutationObserver?.disconnect()
+  mutationObserver = null
+  mediaQueryList?.removeEventListener?.('change', scheduleThemeNotify)
+  mediaQueryList = null
+  if (debounceTimer !== undefined && typeof window !== 'undefined') {
+    window.clearTimeout(debounceTimer)
+    debounceTimer = undefined
+  }
+}
+
+/**
+ * Observe theme flips (`body[data-ds-dark-theme]` and token mutations).
+ * Shared by every TerminalView: one observer runs while at least one listener
+ * is subscribed and mutations are coalesced by a ~100ms debounce.
+ */
+export function observeTheme(listener: ThemeListener): () => void {
+  if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') {
+    return () => {}
+  }
+  themeListeners.add(listener)
+  if (themeListeners.size === 1) startThemeObservation()
+  let disposed = false
   return () => {
-    observer.disconnect()
-    media?.removeEventListener?.('change', onMediaChange)
+    if (disposed) return
+    disposed = true
+    themeListeners.delete(listener)
+    if (themeListeners.size === 0) stopThemeObservation()
   }
 }
 
