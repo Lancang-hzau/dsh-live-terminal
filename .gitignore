@@ -6,3 +6,4 @@ qa/artifacts/
 research/sources/
 .DS_Store
 Thumbs.db
+.devhost-*.log
