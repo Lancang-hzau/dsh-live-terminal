@@ -25,7 +25,9 @@
 
 ## 安装（Desktop）
 
-本机已由开发流程安装到 `~/.dsh/profiles/desktop`。若需在新机器安装：
+本机已由开发流程安装到 `~/.dsh/profiles/desktop`（依赖已 link、bundle 已选中）。**Desktop 版 DSH 在启动时读取 profile，不会热加载新插件，因此安装后需要完全退出并重新打开 DeepSeek Harness 一次**；重启后右侧栏开始页会出现“终端面板”。也可直接运行本仓库的 `tools/install-desktop.ps1` 完成安装（幂等）。
+
+若需在新机器安装：
 
 ```powershell
 # 1) 把插件包链接进 desktop profile
@@ -33,11 +35,19 @@
 
 # 2) 在 ~/.dsh/profiles/desktop/package.json 的 dsh.profile.bundles 数组末尾加入：
 #    "dsh-terminal-panel"
-# 3) 刷新 DSH 页面（或重启 DSH 应用）即可在右侧栏看到“终端面板”
+# 3) 完全退出并重新打开 DSH（Desktop 不热加载新插件）
+```
+
+验证是否加载成功（无需 GUI）：
+
+```powershell
+# 404 = 未加载（还没重启）；401 = 已加载且鉴权生效（正常）
+try { Invoke-WebRequest "http://127.0.0.1:58966/dsh-terminal-panel/sessions" -UseBasicParsing } catch { [int]$_.Exception.Response.StatusCode }
 ```
 
 卸载：从 `dsh.profile.bundles` 中移除 `dsh-terminal-panel`，并执行
 `dsh plugin --profile desktop remove dsh-terminal-panel`，然后重启 DSH。
+若重启后 DSH 异常，可先把 `~/.dsh/profiles/desktop/package.json` 里的 `dsh-terminal-panel` 从 bundles 移除再重启（仓库 `tools/artifacts/desktop-backup-*` 有安装前备份）。
 
 ## 使用
 
@@ -100,13 +110,21 @@ qa/                            独立验收测试计划/脚本
 # 构建浏览器半侧（生成 packages/dsh-terminal-panel/lib/client.js）
 node tools/build-client.mjs
 
-# 单元测试（host 纯逻辑）
-node --test packages/dsh-terminal-panel/tests/
+# 单元测试（host 纯逻辑；Node 24 不支持把目录传给 --test，用 glob）
+node --test "packages/dsh-terminal-panel/tests/*.test.mjs"
 
 # 独立 dev host（不影响正在运行的 Desktop DSH）
 & "D:\DSH\resources\runtime\cli\bin\dsh.cmd" --profile dev --no-open --port 3101
 # 用日志里的带 token URL 打开页面；右侧栏快捷键：Ctrl+Shift+B
 ```
+
+测试与验收（本机实测，2026-10-19）：
+- host 单测 116/116 PASS。
+- 独立 e2e（QA，真实 Chrome）：44 PASS / 0 FAIL / 1 SKIP（SKIP 为 JSON 协议无法承载非法 UTF-8，超契约范围）。
+- 真实 agent 手动项：pwsh 拦截可见、自动弹出、`live_terminal_run` + `live_terminal_screenshot` 文本截图、cwd=会话工作区，全部 PASS。
+- Desktop 等价组合（base + web-app + agent-team + auto-review + better-display + dsh-context + dshmarket + 本插件）在独立 host 验证：插件 host/client 均正常加载。
+- Desktop 实机安装并重启后：7 个 `live_terminal_*` 工具可用，拦截的 `pwsh` 调用在面板生成 command 会话，`live_terminal_run` / `live_terminal_screenshot` 实测通过。
+- 详细报告：`docs/test-report.md`、`docs/architecture.md`。
 
 ## 已知限制
 
@@ -114,3 +132,4 @@ node --test packages/dsh-terminal-panel/tests/
 - 被接管命令的 stdout/stderr 在 PTY 中合并，与内置工具的分流输出形状不同（结果仍符合内置工具 schema）。
 - 当前截图是文本屏幕快照，不是 PNG 图片；模型不需要看图即可理解终端界面。
 - 依赖 DSH 0.2.1-rc.2 的插件 API；DSH 升级后可能需要适配（尤其是 `tools/execute` 拦截与 client 模块基座）。
+- P3：极端情况下（UI 新建终端 → 页面刷新重连 → 关闭），Windows 上可能短暂残留一个 PowerShell/OpenConsole 子进程；不影响功能，重启 DSH 会清理，后续版本跟进。

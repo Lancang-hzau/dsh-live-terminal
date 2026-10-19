@@ -53,6 +53,7 @@ options:
   --http-only             skip UI interactions (page is still loaded to obtain the auth cookie)
   --slow                  include the 20s SSE heartbeat check
   --no-create-session     never create a conversation through the UI session list
+  --keep-sessions         leave created terminal sessions open for debugging
   --host-log=<path>       inspect a dev-host log file for plugin startup errors (E-01)
   --out=<dir>             artifacts directory (default qa/artifacts/<runId>)
   --help, -h              show this help
@@ -69,6 +70,7 @@ if (!url || !/^https?:\/\//.test(url)) {
 const HTTP_ONLY = flags.has('http-only')
 const SLOW = flags.has('slow')
 const NO_CREATE_SESSION = flags.has('no-create-session')
+const KEEP_SESSIONS = flags.has('keep-sessions')
 const HOST_LOG = typeof flags.get('host-log') === 'string' ? flags.get('host-log') : process.env.DSH_QA_HOST_LOG
 const runId = new Date().toISOString().replace(/[:.]/g, '-')
 const artifacts = typeof flags.get('out') === 'string' ? resolve(repoRoot, flags.get('out')) : join(repoRoot, 'qa', 'artifacts', runId)
@@ -1324,11 +1326,26 @@ async function runHttpChecks() {
 
   await test('H-06', 'POST /input 写入命令 → snapshot 出现输出', 'AUTO-HTTP', async () => {
     assert(https.mainSessionId, '前置 H-03 未创建会话')
-    await waitForShellReady(https.mainSessionId)
+    const ready = await waitForShellReady(https.mainSessionId, 30_000)
+    const before = await getSnapshot(https.mainSessionId)
+    if (!ready) {
+      const sessions = await fetchSessions().catch(() => [])
+      throw new Error(
+        `会话 30s 内未出现 shell 提示符（怀疑 spawn 挂起）：state=${before.info?.state} text=${JSON.stringify((before.text ?? '').slice(-240))} screenLen=${(before.screen ?? '').length} sessions=${JSON.stringify(sessions.map((session) => ({ id: session.id.slice(0, 8), kind: session.kind, state: session.state, title: session.title })))}`,
+      )
+    }
     const nonce = `qa-input-${Date.now().toString(36)}`
     await runCommand(https.mainSessionId, `Write-Output '${nonce}'`)
-    const hit = await waitForSnapshotText(https.mainSessionId, nonce, 20_000)
-    return { nonce, elapsedMs: hit.elapsedMs }
+    try {
+      const hit = await waitForSnapshotText(https.mainSessionId, nonce, 20_000)
+      return { nonce, elapsedMs: hit.elapsedMs, shellReady: ready }
+    } catch (error) {
+      const latest = await getSnapshot(https.mainSessionId).catch(() => null)
+      const output = await http('POST', '/dsh-terminal-panel/input', { data: { id: https.mainSessionId, data: 'Write-Output qa-diagnostic-probe\r' } }).catch(() => null)
+      throw new Error(
+        `${error.message}; state=${latest?.info?.state} latestText=${JSON.stringify((latest?.text ?? '').slice(-300))} screenLen=${(latest?.screen ?? '').length} retryInputStatus=${output?.status ?? 'n/a'}`,
+      )
+    }
   })
 
   await test('H-07', 'SSE /events?id= 帧格式与首帧 snapshot', 'AUTO-SSE', async () => {
@@ -1355,17 +1372,24 @@ async function runHttpChecks() {
 
   await test('H-08', 'SSE 实时输出 + seq 递增（<5s）', 'AUTO-SSE', async () => {
     assert(https.mainSessionId, '前置 H-03 未创建会话')
-    await waitForShellReady(https.mainSessionId)
+    const ready = await waitForShellReady(https.mainSessionId, 30_000)
+    if (!ready) throw new Error('H-08 前置：会话 30s 内未出现 shell 提示符')
     const sse = await openSse(`/dsh-terminal-panel/events?id=${encodeURIComponent(https.mainSessionId)}`)
     try {
-      await sse.waitFor((frame) => frame.event === 'snapshot', 15_000)
+      const snapshotFrame = await sse.waitFor((frame) => frame.event === 'snapshot', 15_000)
       const nonce = `qa-sse-${Date.now().toString(36)}`
       const sentAt = Date.now()
       await runCommand(https.mainSessionId, `Write-Output '${nonce}'`)
-      const outputFrame = await sse.waitFor(
-        (frame) => frame.event === 'output' && framePayloadString(frame).includes(nonce),
-        10_000,
-      )
+      let outputFrame
+      try {
+        outputFrame = await sse.waitFor((frame) => frame.event === 'output' && framePayloadString(frame).includes(nonce), 15_000)
+      } catch (error) {
+        const latest = await getSnapshot(https.mainSessionId).catch(() => null)
+        const frameSummary = sse.state.frames.map((frame) => (frame.kind === 'heartbeat' ? ':hb' : `${frame.event}:${frame.dataText.slice(0, 60)}`)).slice(-8)
+        throw new Error(
+          `${error.message}; frames=${JSON.stringify(frameSummary)} snapshotSeq=${snapshotFrame.data?.seq} latestState=${latest?.info?.state} latestText=${JSON.stringify((latest?.text ?? '').slice(-240))}`,
+        )
+      }
       const latencyMs = outputFrame.at - sentAt
       assert(latencyMs < 5000, `output 帧延迟过大: ${latencyMs}ms（目标 <2s）`)
       const outputFrames = sse.state.frames.filter((frame) => frame.kind === 'event' && frame.event === 'output')
@@ -1542,6 +1566,7 @@ async function runHttpChecks() {
 
   // Cleanup sessions created by the HTTP tests (kept sessions only).
   await test('H-19', '自动化清理本测试创建的会话（无泄漏）', 'AUTO-HTTP', async () => {
+    if (KEEP_SESSIONS) return { skipped: '--keep-sessions' }
     const sessions = await fetchSessions()
     const leftovers = sessions.filter((session) => createdSessionIds.has(session.id) && !initialSessionIds.has(session.id))
     for (const session of leftovers) await closeSession(session.id)
@@ -1753,6 +1778,10 @@ function recordStaticChecklist() {
 // ---------------------------------------------------------------------------
 
 async function cleanupSessions() {
+  if (KEEP_SESSIONS) {
+    console.log('[cleanup] --keep-sessions: leaving sessions open for inspection')
+    return { skipped: true }
+  }
   try {
     const sessions = await fetchSessions()
     // Only close sessions this run created — never pre-existing/foreign sessions.

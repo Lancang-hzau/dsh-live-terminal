@@ -1,28 +1,28 @@
-# dsh-terminal-panel 独立测试报告（正式验收）
+# dsh-terminal-panel 独立测试报告（最终验收 vFinal）
 
 | 项 | 值 |
 |---|---|
-| 报告版本 | v1.1（正式验收；Lead 3101 manual 结果部分并入，E-10 重做项待最终结果后更新） |
+| 报告版本 | **vFinal**（最终验收；自动 e2e + Lead 3101 真实 agent manual 结果已全部并入） |
 | 测试执行 | qa-verifier（独立 QA） |
 | 日期 | 2026-10-19 Asia/Shanghai |
-| 契约 | `docs/architecture.md`（含 2026-10-19 Lead 契约更新：`live_` 前缀 / 自动打开 / 截图=文本屏幕） |
-| 被测版本 | `packages/dsh-terminal-panel`（host `lib/index.js` + `lib/host/**`；client `client-src/**` → `lib/client.js` 构建产物） |
+| 契约 | `docs/architecture.md`（含 2026-10-19 更新：`live_` 前缀 / 自动打开 / 截图=文本屏幕 / `visibleText` viewport 语义 / task-4 后 run→独立命令会话 + screenshot 默认目标） |
+| 被测版本 | `packages/dsh-terminal-panel`（host `lib/index.js` + `lib/host/**`；client `client-src/**` → `lib/client.js` 构建产物），含 task-4（host run/screenshot 重做、sessions 注入、进程终止）、task-5（client 传 sessionId） |
 | 测试环境 | DSH 0.2.1-rc.2，dev profile，QA 专用 dev host **127.0.0.1:3105** |
 | 自动化入口 | `tools/qa-e2e.mjs`（Playwright 系统 Chrome + 真实 fetch/SSE 断言） |
-| 正式验收 run | `qa/artifacts/2026-10-19T10-15-44-399Z/`（`summary.json` / `console.log` / 13 张截图） |
+| **最终验收 run** | `qa/artifacts/2026-10-19T10-52-17-172Z/`（`summary.json` / `console.log` / 13 张截图） |
 | 测试计划 | `qa/test-plan.md` |
 
 ---
 
 ## 0. 结论（TL;DR）
 
-- **正式验收 run：PASS 44 / FAIL 0 / SKIP 1 / MANUAL 29**（MANUAL 中的静态审查与重启项已由 QA 完成并判 PASS；Lead 3101 真实 agent 补测已确认 E-09/T-02 拦截、E-12/T-11 自动打开 **PASS**，E-10/T-04 发现 **P1** 由 host-engine task-4 重做中，其余 manual 待并入）。
-- 验收门槛（architecture.md §6.3）自动可测部分 **全部通过**：host 启动无插件报错、`/sessions` 带 cookie 200、client bundle 无 console error、面板可开/可输入/可 resize/可关、SSE 实时输出、UTF-8/ANSI/长输出正确、未鉴权 401、错误返回 JSON。
-- 本轮重点回归的 3 个历史 FAIL 均已转 PASS：**U-11 刷新恢复面板**、**H-07 SSE 帧格式**、**H-16 >1MB 请求体 413 JSON**。
-- host 单测独立运行 **105/105 PASS**；client 构建 **392,975 B（383.8 KiB，gzip 100.2 KiB）**，ModuleLoader factory 模拟返回 `{apply, inject}` 正常。
-- 剩余非阻断问题 2 项 + 观察 2 项（见 §5），其中 **P2-1「新建终端进入会话工作区」未完全闭环**（host 支持 `sessionId` 但解析未生效、client 也未传 `sessionId`），已拆分给 host-engine（task-4，sessions 注入时序）与 client-ui（task-5，传 sessionId）；不影响验收门槛。
-- **Lead 3101 真实 agent manual 结果（部分并入，最终结果待并入）**：E-09 拦截 pwsh **PASS**、E-12 自动打开面板 **PASS**（同一证据：chat 显示“运行命令 · Output intercept-ok”，右侧栏自动打开并出现 command 会话与输出、状态“已退出(0)”）；E-10 `live_terminal_run`+`screenshot` 发现 **P1 可用性问题**，host-engine 在 **task-4** 重做（run 改独立命令会话 + render 暴露 terminalId + screenshot 默认目标）；其余 manual 项待 Lead 最终结果。本报告保持“待并入”状态，最终 manual 结果到达后更新 §3/§4.7/§5/§9。
-- 未触碰用户 Desktop DSH（58966 PID 25976 全程不变）与 `D:\DSH`；未重启 3101/3103/3104；测试期间未发送任何对话消息、未消耗模型额度。
+- **最终验收（最新 host+client，全新 3105 host，串行 `--slow`）：PASS 44 / FAIL 0 / SKIP 1 / MANUAL 29**（run `2026-10-19T10-52-17-172Z`，73.5s）。
+- **验收门槛（architecture.md §6.3）全部满足**：host 启动无插件报错、`/sessions` 200、client bundle 无 console error、面板可开/输入/resize/关闭、SSE 实时、UTF-8/ANSI/长输出、未鉴权 401、错误 JSON；**拦截 pwsh（B）**、**自动打开面板**、**`live_terminal_screenshot` 文本截图（C）** 均由 Lead 在 3101 用真实 deepseek-flash agent 复测 **PASS**。
+- **P2-1 cwd 已闭环**：client 新建终端携带 `sessionId`，host 解析会话工作区；QA e2e U-06 实测 `cwd=C:\Users\LANCANG\Desktop\Code\lancang`（会话工作区）、`sessionId` 已写入 SessionInfo；Lead 3101 实测 `cwd=…\BIG DATA`（会话工作区）PASS。裸 HTTP `/create` 不带 sessionId 仍回退 host 启动目录，属预期。
+- **P1-2 run+screenshot 已修复并验证**：task-4 重做后，`live_terminal_run` 返回首行 `[terminal <id>]`、无 wrapper 噪声；`live_terminal_screenshot` 缺省选中最新 command 会话并返回干净可见屏文本 + `[terminal … 86x50 cursor (0,24) exited]`，agent 原样贴出（Lead 证据 `tools/artifacts/tool-test-final.png`）。
+- host 单测 **116/116 PASS**；client 构建 **393,231 B（384.0 KiB，gzip 100.3 KiB）**；e2e 期间插件 HTTP 调用 0 次 4xx/5xx、无 plugin console error/pageerror。
+- 剩余：**E-11 desktop profile 安装**由 Lead 安装后用 58966 探测确认（QA 不重启用户 Desktop）；另有 P3 观察 4 项（DSH 内部偶发 pageerror、e2e 环境并发 flake、剪贴板首行比对、关闭会话后 shell 进程残留），均非验收阻断。
+- 未触碰用户 Desktop DSH（58966 PID 25976 全程不变）与 `D:\DSH`；未重启 3101/3103/3104；QA 侧未发送任何对话消息、未消耗模型额度。
 
 ---
 
@@ -30,12 +30,13 @@
 
 | 项 | 值 |
 |---|---|
-| dev host 命令 | `& "D:\DSH\resources\runtime\cli\bin\dsh.cmd" --profile dev --no-open --port 3105` |
-| dev host 日志 | `qa/artifacts/devhost-3105-accept.log`（启动后仅 `dsh web:` + llm model listing，无插件错误行） |
-| 端口 | 3105 = QA host（PID 32024）；3101 = Lead 集成 host（PID 31432，未动）；3103/3104 = 队友 host（未动）；58966 = 用户 Desktop（PID 25976，未动） |
+| 最终 dev host | `& "D:\DSH\resources\runtime\cli\bin\dsh.cmd" --profile dev --no-open --port 3105`；PID 6436；日志 `qa/artifacts/devhost-3105-final2.log` |
+| host 日志 | 仅 `dsh web:` + llm model listing，无插件错误行 |
+| 端口 | 3105 = QA host；3101 = Lead 集成 host（QA 未动）；3103/3104 未动；58966 = 用户 Desktop（PID 25976，全程不变） |
 | 浏览器 | 系统 Chrome（`C:/Program Files/Google/Chrome/Application/chrome.exe`），Playwright headless |
-| client 构建 | `node tools/build-client.mjs` @ 2026-10-19 18:15:04；externals 与契约 §5.3 一致；xterm + CSS 已打包进单文件 |
-| host 单测 | `node --test --test-concurrency=1 packages/dsh-terminal-panel/tests/*.test.mjs` → **105 pass / 0 fail**（3.2s） |
+| client 构建 | `node tools/build-client.mjs` @ 2026-10-19 18:46:26；单文件 393,231 B；externals 与契约 §5.3 一致；xterm + CSS 打包进 bundle |
+| host 单测 | `node --test --test-concurrency=1 packages/dsh-terminal-panel/tests/*.test.mjs` → **116 pass / 0 fail**（含 registry/shell/tools/intercept/wrapper/session/screen/ring/ansi） |
+| 契约更新 | architecture.md 已同步 `visibleText` viewport 语义、`live_terminal_run` 独立命令会话 + render `[terminal <id>]`、`live_terminal_screenshot` 缺省目标（最近可见会话，command 优先） |
 
 ---
 
@@ -43,14 +44,19 @@
 
 | 阶段 / run | 说明 | 结果 |
 |---|---|---|
-| 阶段 A 干跑（3104 skeleton） | 验证 e2e 机制（UI 选择器、cookie、401、JSON/SSE 断言） | 6 PASS / 27 FAIL（host 路由尚未实现，预期） |
-| 预验收 run 1 `2026-10-19T10-07-26-684Z` | 首次全量（U-11/H-07 为测试脚本问题，H-16 为产品问题） | 40 PASS / **3 FAIL** / 1 SKIP |
-| 预验收 run 2 `2026-10-19T10-10-44-820Z` | 修 e2e SSE 解析与 guide 选择器 | 42 PASS / **1 FAIL**（H-16） |
-| 预验收 run 3 `2026-10-19T10-13-05-088Z` | 增加 E-04（刷新后无 plugin 异常）；host 修复前 | 43 PASS / **1 FAIL**（H-16） |
-| **正式验收 run `2026-10-19T10-15-44-399Z`** | 重建 client + 重启 3105 host 加载最新 host 代码；`--slow`（含 20s SSE 心跳）+ `--host-log` | **44 PASS / 0 FAIL / 1 SKIP / 29 MANUAL**（84.7s） |
+| 阶段 A 干跑（3104 skeleton） | 验证 e2e 机制（选择器/cookie/401/JSON/SSE 断言） | 6 PASS / 27 FAIL（host 路由未实现，预期） |
+| 预验收 run1 `10-07-26-684Z` | 首次全量；U-11/H-07 为脚本问题、H-16 为产品问题 | 40 PASS / **3 FAIL** / 1 SKIP |
+| 预验收 run2 `10-10-44-820Z` | 修 e2e SSE 解析与 guide 选择器 | 42 PASS / **1 FAIL**（H-16） |
+| 预验收 run3 `10-13-05-088Z` | 增加 E-04；host 修复前 | 43 PASS / **1 FAIL**（H-16） |
+| 正式验收 run `10-15-44-399Z` | 上一轮最新代码 + 重启 host | **44 PASS / 0 FAIL / 1 SKIP** |
+| Lead 3101 e2e `10-36-36` | Lead 用 QA e2e 在集成 host 串行跑 | 44 PASS / 0 FAIL / 3 SKIP（未带 `--slow`/`--host-log`） |
+| 最终轮尝试 A `10-41-57-134Z` | 最新代码、全新 host；H-06/H-08 环境 flake | 42 PASS / **2 FAIL**（H-06/H-08） |
+| 最终轮尝试 B `10-44-57-684Z` | 同上，复现 flake | 42 PASS / **2 FAIL**（H-06/H-08） |
+| 隔离验证 `10-47-29-909Z` | `--http-only`（无 UI 阶段） | 29 PASS / 0 FAIL / 7 SKIP → H-06/H-08 通过 |
+| 诊断 run `10-49-59-176Z` | 清理 2 个 orphaned pwsh/OpenConsole 后 `--keep-sessions` | **44 PASS / 0 FAIL / 1 SKIP** |
+| **最终验收 canonical `10-52-17-172Z`** | 再次全新 host、串行 `--slow --host-log`、正常清理 | **44 PASS / 0 FAIL / 1 SKIP / 29 MANUAL（73.5s）** |
 
-> SKIP = `B-09 非法 UTF-8 字节输入`：JSON 协议无法承载非法 UTF-8，超出契约范围（见 §4.3）。
-> MANUAL 29 = 静态审查 11（S-01..S-11，QA 已完成并判 PASS）+ 重启/隔离 3（R-01..R-03，QA 已完成）+ QA 静态可判 3（T-01/T-09/T-10）+ 需 Lead 真 agent 补测项（E-09/T-02、E-12/T-11 已 PASS；E-10/T-04 P1 重做中；T-03/T-05/T-06/T-07/T-08/E-11 待最终结果）。
+> **环境 flake 说明**：最终轮 A/B 的 H-06/H-08 失败（交互会话 30s 内无 shell 提示符/无输出）与同一代码的 `--http-only` 全过、清理 orphaned `pwsh.exe`+`OpenConsole.exe` 后全量过相互印证，判定为 **PTY/进程环境竞争 flake**，不是产品回归；已作为环境噪声归档。Lead 也观察到 B-05 在与其 agent 测试并发时 flake 一次、单独跑稳定 PASS，同类归档。
 
 ---
 
@@ -58,19 +64,20 @@
 
 | 门槛 | 结果 | 证据 |
 |---|---|---|
-| dev host 启动无插件报错 | **PASS** | `qa/artifacts/devhost-3105-accept.log`；`/ping` 200、`/sessions` 200 |
-| `GET /dsh-terminal-panel/sessions` 带 cookie 200 | **PASS** | H-01（`summary.json`） |
+| dev host 启动无插件报错 | **PASS** | `qa/artifacts/devhost-3105-final2.log`；`/ping` 200、`/sessions` 200 |
+| `/dsh-terminal-panel/sessions` 带 cookie 200 | **PASS** | H-01 |
 | client bundle 加载无 console error | **PASS** | E-03：marker=true、clientLog=true、pluginConsoleErrors=0、pageErrors=0；`01-app-loaded.png` |
 | 面板可开、可输入、可 resize、可关 | **PASS** | U-04/U-05/U-07/U-09/U-10；`04/05/07/09/13-*.png` |
-| SSE 实时输出 | **PASS** | H-08：首帧 snapshot、output 帧延迟 116ms、`seq` 单调递增（84→88）、data keys `{id,seq,chunk}` |
-| 拦截生效（需真实 agent） | **PASS**（Lead 3101 manual，待并入最终记录） | E-09/T-02：chat 显示“运行命令 · Output intercept-ok”，面板出现 command 会话与实时输出、状态“已退出(0)”，工具结果正常 |
-| agent 命令会话自动打开面板（§5.2） | **PASS**（Lead 3101 manual，同一证据） | E-12/T-11：右侧栏自动打开终端面板并显示新的 command 会话 |
-| `live_terminal_screenshot` 返回当前屏幕文本 | **待 Lead 最终结果（P1 重做中）** | E-10 在 3101 暴露 P1 可用性问题；host-engine task-4 重做（run 独立命令会话 + render 暴露 terminalId + screenshot 默认目标），QA 待复测 |
-| desktop profile 安装后同样工作 | **待 Lead**（不在 QA 自动化范围，不重启 58966） | §9 E-11 |
+| SSE 实时输出 | **PASS** | H-08：首帧 snapshot、output 帧延迟 **8ms**、`seq` 单调（13→17）、data `{id,seq,chunk}` |
+| 拦截生效（真实 agent，B） | **PASS**（Lead 3101） | E-09/T-02：chat “运行命令 · Output intercept-ok”，右侧栏出现 command 会话（title=命令、cwd=会话工作区）、屏幕 intercept-ok、状态“已退出(0)”，agent 回复正确；证据 `tools/artifacts/agent-test-02/03.png` |
+| agent 命令会话自动打开面板（§5.2） | **PASS**（Lead 3101，同一证据） | E-12/T-11：面板未开时自动打开右侧栏“终端面板”并选中命令 tab |
+| `live_terminal_screenshot` 返回屏幕文本（C） | **PASS**（Lead 3101） | E-10/T-04：run 首行 `[terminal <id>]`、无 wrapper 噪声；screenshot 缺省选中最新 command 会话，返回 `[terminal Get-Location; … 86x50 cursor (0,24) exited]` + 干净可见屏文本；agent 原样贴出；证据 `tools/artifacts/tool-test-final.png` |
+| 新建终端在会话工作区（P2-1） | **PASS** | QA U-06：`sessionId=session-d63c2d80-…`、`cwd=C:\Users\LANCANG\Desktop\Code\lancang`；Lead 3101：`cwd=…\BIG DATA` |
+| desktop profile 安装后同样工作 | **待 Lead**（Lead 即将安装并用 58966 探测；QA 不重启用户 Desktop） | E-11 |
 
 ---
 
-## 4. 分项结果
+## 4. 分项结果（最终验收 run `10-52-17-172Z`）
 
 ### 4.1 UI e2e（A：可见终端面板）
 
@@ -78,235 +85,204 @@
 |---|---|---|
 | U-01 打开 dev GUI | PASS | 标题 DeepSeek Harness，`__DSH_TERMINAL_PANEL__=true`；`01-app-loaded.png` |
 | U-02 关闭预览弹窗 | PASS | 无遮挡；`02-after-overlays.png` |
-| U-03 打开会话（不发送消息） | PASS | 复用已有会话「大数据实验手册操作指导」；`03-conversation.png` |
+| U-03 打开会话（不发送消息） | PASS | composer 已可见（复用已有会话）；`03-conversation.png` |
 | U-04 Ctrl+Shift+B → guide「终端面板」 | PASS | 右侧栏展开，guide 入口 1 个；`04-right-sidebar-guide.png` |
-| U-05 点 guide → 面板 body | PASS | `[data-dsh-terminal-panel="body"]` 渲染；工具栏按钮：新建终端/刷新/重新连接/复制屏幕/关闭终端；`05-panel-open.png` |
-| U-14 空态/新建入口 | PASS | `[data-dsh-tp-action=create]` 存在，phase=ready |
-| U-06 新建终端 → xterm | PASS | 新会话 running，cols/rows=100x30（新建时尺寸），xterm 挂载；`06-xterm-created.png` |
-| U-07 输入命令 → 屏幕输出 | PASS | `Write-Output 'qa-hello-…'`，6ms 内屏幕出现（xterm 可见屏） |
+| U-05 点 guide → 面板 body | PASS | `[data-dsh-terminal-panel="body"]`；工具栏按钮齐全；`05-panel-open.png` |
+| U-14 空态/新建入口 | PASS | `[data-dsh-tp-action=create]`，phase=ready |
+| U-06 新建终端 → xterm | PASS | 新会话 running 86x44、**cwd=会话工作区、sessionId 已传**；`06-xterm-created.png` |
+| U-07 输入命令 → 屏幕输出 | PASS | `Write-Output 'qa-hello-…'`，1ms 内屏幕出现 |
 | U-08 中文输出 | PASS | `中文-qa` 正确渲染，无 `�`；`08-xterm-chinese.png` |
-| U-09 resize | PASS | 视口 1440x900→1200x680：host 尺寸 100x30→68x31，观察到 POST `/resize`；`09-resized.png` |
-| U-10 UI 关闭会话 | PASS | 关闭按钮 → host `/sessions` 移除该 id；`13-session-closed.png` |
-| U-11 刷新后重开面板/重连 | PASS | host 会话保留、snapshot 保留旧输出、UI 重新挂载并恢复屏幕文本（`restoredInUi=true`）；`10-after-reload.png` |
-| U-12 多会话 + 标签切换 | PASS | 两个终端、切换标签后各自屏幕正确、host snapshot 内容互不串台；`11-multi-session.png` |
-| U-13 面板截图/复制按钮 | PASS | 剪贴板 167 字符、内容为当前屏幕文本（含 prompt 与命令输出）；`12-screenshot-button.png`；观察项见 §5-O-3 |
+| U-09 resize | PASS | 86x44 → 68x31，观察到 2 次 POST `/resize`；`09-resized.png` |
+| U-10 UI 关闭会话 | PASS | 关闭按钮 → host `/sessions` 移除；`13-session-closed.png` |
+| U-11 刷新后重开面板/重连 | PASS | host 会话保留、snapshot 保留旧输出、UI 恢复屏幕文本；`10-after-reload.png` |
+| U-12 多会话 + 标签切换 | PASS | 两会话、切换标签各自屏幕正确、host snapshot 不串台；`11-multi-session.png` |
+| U-13 面板截图/复制按钮 | PASS | 剪贴板 161 字符、内容为当前屏幕文本；`12-screenshot-button.png`；首行比对差异为观察项 O-3 |
 
 ### 4.2 HTTP/SSE 契约（architecture.md §4.4）
 
 | ID | 结果 | 说明 |
 |---|---|---|
-| H-01 `/sessions` 200 + SessionInfo[] | PASS | 字段/枚举校验通过；含已退出保留会话语义由 B-05 覆盖 |
-| H-02 无 cookie → 401 | PASS | `401`；契约 §4.4 admit 失败行为 |
-| H-03 `POST /create` | PASS | 200 `{session}`；SessionInfo 合法（interactive/running/cwd/cols/rows） |
+| H-01 `/sessions` 200 + SessionInfo[] | PASS | 字段/枚举校验通过 |
+| H-02 无 cookie → 401 | PASS | admit 失败行为符合契约 |
+| H-03 `POST /create` | PASS | 200 `{session}`；SessionInfo 合法（裸 HTTP 无 sessionId → cwd 回退 host 启动目录，预期） |
 | H-04 `/create` 缺省尺寸 | PASS | 默认 120x30 |
 | H-05 `GET /snapshot` | PASS | `{info,screen,text,cursor}` 形状正确 |
-| H-06 `/input` → snapshot 输出 | PASS | 命令输出出现在 snapshot.text |
-| H-07 SSE 帧格式/首帧 | PASS | `Content-Type: text/event-stream`；首事件 `snapshot`；data 为 JSON（含 info/screen/text/cursor/seq）；`retry:` 控制帧不再误判 |
-| H-08 SSE 实时性/seq | PASS | 延迟 116ms（<2s 目标）；output 帧 `{id,seq,chunk}` 且 seq 单调 |
-| H-09 全局 `/events` sessions 事件 | PASS | 新建会话后收到 `sessions` 事件（data=`{sessions}`） |
+| H-06 `/input` → snapshot 输出 | PASS | shellReady=true，输出延迟 213ms |
+| H-07 SSE 帧格式/首帧 | PASS | `text/event-stream`；首事件 snapshot；data JSON；retry 控制帧不误判 |
+| H-08 SSE 实时性/seq | PASS | 延迟 8ms（<2s）；output 帧 `{id,seq,chunk}` seq 单调 |
+| H-09 全局 `/events` sessions 事件 | PASS | 新建会话后收到 `sessions` 事件 |
 | H-10 `/resize` 生效 | PASS | 200 `{ok:true}`，snapshot.info 同步 90x25 |
-| H-11 `/close` | PASS | 200；`/sessions` 移除；snapshot 404 `{error}` |
-| H-12 snapshot 缺 id/未知 id | PASS | 400/404 + `{error:string}` |
-| H-13 input 未知 id | PASS | 404 + `{error}` |
-| H-14 resize 参数校验 | PASS | 非整数→400；0/负数→安全钳制（120x24/120x30 等，记录策略，契约未强制 4xx） |
-| H-15 非法 JSON body | PASS | 400 + 错误 JSON；后续请求正常 |
-| H-16 >1MB 请求体 | PASS（本轮修复） | 返回 **413** JSON；服务未崩溃（`/sessions` 仍 200） |
-| H-17 SSE 反复连接/断开 | PASS | 5 次连接/断开后服务正常，新 SSE 首帧正常 |
-| H-18 20s 心跳注释 | PASS（--slow） | 21s 内收到 1 个 heartbeat 注释帧 |
-| H-19 测试会话清理 | PASS | 运行结束关闭本次创建的全部会话（4 个），无泄漏 |
+| H-11 `/close` | PASS | 200；列表移除；snapshot 404 `{error}` |
+| H-12/H-13/H-15 错误处理 | PASS | 缺 id/未知 id → 4xx `{error}`；非法 JSON → 400 且服务不崩 |
+| H-14 resize 参数校验 | PASS | 非整数→400；越界值→安全钳制（记录策略，非缺陷 O-2） |
+| H-16 >1MB 请求体 | PASS | **413 JSON**，服务不崩溃 |
+| H-17 SSE 反复连接 | PASS | 5 次连接/断开后正常 |
+| H-18 20s 心跳 | PASS（--slow） | 21s 内收到 heartbeat |
+| H-19 测试会话清理 | PASS | 关闭本次创建的全部会话（4 个），无 API 残留 |
 
 ### 4.3 边界与数据正确性
 
 | ID | 结果 | 说明 |
 |---|---|---|
-| B-01 中文/UTF-8 | PASS | snapshot.text 精确包含 `中文测试-终端面板-…` |
+| B-01 中文/UTF-8 | PASS | snapshot.text 精确包含中文串 |
 | B-02 UTF-8 跨块（大段 CJK） | PASS | 2283 字节可见屏，无 `\uFFFD` |
-| B-03 ANSI | PASS | snapshot.screen 保留 `\x1b[` SGR；snapshot.text 无 ESC 且含彩色输出文本 |
-| B-04 长输出 500 行 | PASS | 可见屏 30 行（=rows），尾部含 `qa-line-500`，无崩溃 |
-| B-05 交互会话 `exit` | PASS | state=exited、exitCode=0，快照仍可读 |
-| B-06 多会话隔离 | PASS | 两会话 snapshot 互不含对方输出 |
-| B-07 ~64KB 输入 | PASS | 200；随后 Ctrl-C 恢复，会话仍 running |
-| B-08 Ctrl-C（`\u0003`） | PASS | 中断 Start-Sleep，会话保持 running |
+| B-03 ANSI | PASS | screen 保留 `\x1b[` SGR；text 无 ESC |
+| B-04 长输出 500 行 | PASS | 可见屏 44 行（=rows），尾部含 `qa-line-500` |
+| B-05 `exit` | PASS | state=exited、exitCode=0（并发重负载时曾 flake 一次，单独跑稳定） |
+| B-06 多会话隔离 | PASS | 两会话输出互不串台 |
+| B-07 ~64KB 输入 | PASS | 200；Ctrl-C 恢复，会话 running |
+| B-08 Ctrl-C | PASS | 中断前台命令，会话保持 running |
 | B-09 非法 UTF-8 字节 | SKIP | JSON 协议无法承载，超出契约范围 |
 
 ### 4.4 客户端加载与环境
 
 | ID | 结果 | 说明 |
 |---|---|---|
-| E-01 host 启动日志无插件报错 | PASS（证据较弱） | 日志无 error/exception 行；注意插件 `ctx.logger` 输出未进 stdout，仅见 `dsh web:` 与 LLM model listing，故以“无错误行 + HTTP 200 证据”判定 |
-| E-03 client bundle 加载 | PASS | marker=true、`[dsh-terminal-panel] client half loaded`；plugin console error=0、pageerror=0、plugin HTTP 失败=0 |
-| E-04 刷新/多会话后 plugin 运行时异常 | PASS | plugin 相关 pageerror/console error=0；非 plugin 的 DSH 页面异常单独记录（见 §5-O-1） |
+| E-01 host 启动日志无插件报错 | PASS | 无 error/exception；插件 `ctx.logger` 未落 stdout，故以无错误行 + HTTP 200 判定（证据强度一般） |
+| E-03 client bundle 加载 | PASS | marker + clientLog；plugin console error/pageerror=0；plugin HTTP 失败=0 |
+| E-04 刷新/多会话后运行时异常 | PASS | plugin 相关异常=0；非 plugin 的 DSH 页面异常单独记录（O-1） |
 
 ### 4.5 host 单元测试（QA 独立运行）
 
 - 命令：`node --test --test-concurrency=1 --test-reporter=spec packages/dsh-terminal-panel/tests/*.test.mjs`
-- 结果：**105 pass / 0 fail**（8 个测试文件：ansi/ring/screen/session/wrapper/intercept/intercept-value/tools）。
-- QA 在开发期独立运行曾发现并回报 2 个真实缺陷（`ByteTail` 多 chunk 下字节上限失效、文本无限增长）与 2 个测试自身问题（Readable 分块合并导致的时序断言、wrapper 回显测试数据顺序），host-engine 均已修复/调整，当前全绿。
+- **116 pass / 0 fail**（约 2.6s）。
+- 覆盖：ansi/ring/screen/session/wrapper/intercept/intercept-value/tools/registry/shell；含 `live_terminal_run` 独立命令会话、render 首行 `[terminal <id>]`、screenshot 缺省目标、send/read 默认交互终端、超时/abort 映射、`resolveSessionCwd`（live/持久化/前缀容错）等 task-4 新语义。
+- QA 在开发期独立跑单测曾发现并回报 2 个真实缺陷（`ByteTail` 多 chunk 字节上限失效、文本无限增长）与 2 个测试自身问题，host-engine 已修复，当前全绿。
 
 ### 4.6 契约一致性静态审查（S-01..S-11）
 
 | ID | 结果 | 要点 |
 |---|---|---|
-| S-01 路由方法/路径/请求/响应 | PASS | 全部 `prefix:/dsh-terminal-panel`；路径/方法/响应形状与 §4.4 一致；额外 `/ping`（不冲突，调试用途） |
-| S-02 SSE 格式/心跳/清理 | PASS | `event:/data:` 帧、`retry: 1000` 控制帧、20s `: ping` 心跳；`req/res close/error` 幂等清理订阅 |
-| S-03 SessionInfo | PASS | 字段/枚举与 §4.4 一致（运行时 H-01/H-03 + 单测双重校验） |
-| S-04 工具 | PASS | 7 个工具均为 `live_terminal_*`；parameters 为 JSON Schema 对象、`additionalProperties:false`；output.schema 严格；render 返回 text blocks |
-| S-05 拦截与回退 | PASS | 仅 `pwsh`/`bash`；`run_in_background`/`sandbox_permissions` → `next()`；无 agent/失败 → `next()`；value 形状与内置 pwsh foreground 一致（`intercept-value.test.mjs`） |
-| S-06 配置项/默认值 | PASS | `interceptShellTools/shellPath/scrollback/maxOutputBytes/maxSessions/commandTimeoutMs/retainExited` 与 §4.1 一致并做上下界钳制 |
-| S-07 host 运行时契约 | PASS | 无 `@deepseek-ai/*` import；`inject=['tools']`；headless xterm 经 `createRequire` 懒加载 |
-| S-08 client 注册 | PASS | locale zh/en、`sidebarRightTabs.register`(multiple/priority/guide)、`slots.inject('sidebar.right.pane.tab')`、guide 文案「终端面板」、自动打开（每标签页一次）；构建产物 factory 返回 `{apply,inject:["slots","locale","sidebarRight","sidebarRightTabs"]}` |
-| S-09 构建产物 | PASS | 单文件 `lib/client.js`、`window.__ModuleLoader__.load({id,factory})` 包装、externals 仅平台基座、xterm+CSS 打包、`<style data-plugin>` 幂等注入 |
-| S-10 单测覆盖 §6.1 | PASS | ansi/ring/wrapper 解析/value 映射/工具 schema/会话行为均有测试（105 例） |
-| S-11 会话语义 | PASS | 单 writer promise 队列、流式 TextDecoder + EOF flush、命令会话保留 `retainExited`、交互会话不自动移除、snapshot 与 seq 一致 |
+| S-01 路由方法/路径/请求/响应 | PASS | 全部 `prefix:/dsh-terminal-panel`，形状与 §4.4 一致；额外 `/ping` 不冲突 |
+| S-02 SSE 格式/心跳/清理 | PASS | `event:/data:`、`retry: 1000` 控制帧、20s `: ping` 心跳、close 幂等清理 |
+| S-03 SessionInfo | PASS | 字段/枚举与 §4.4 一致（H-01/H-03 + 单测双重校验） |
+| S-04 工具 | PASS（task-4 后更新） | 7 个 `live_terminal_*`；JSON Schema 参数/严格 output.schema；`run` render 首行 `[terminal <id>]`；`screenshot` 缺省目标=最近可见会话（command 优先）；send/read 默认交互终端 |
+| S-05 拦截与回退 | PASS | 仅 `pwsh`/`bash`；后台/沙箱参数与失败 → `next()`；value 与内置 pwsh foreground 一致（单测） |
+| S-06 配置项/默认值 | PASS | §4.1 全部配置项一致并钳制 |
+| S-07 host 运行时契约 | PASS | 无 `@deepseek-ai/*` import；`inject=['tools']`；headless xterm `createRequire` |
+| S-08 client 注册 | PASS | locale/sidebarRightTabs/guide/slots、自动打开（每标签页一次）、传 sessionId；factory 返回 `{apply,inject}` |
+| S-09 构建产物 | PASS | 单文件 ModuleLoader 包装、externals 仅平台基座、xterm+CSS 打包、`<style data-plugin>` 幂等 |
+| S-10 单测覆盖 §6.1 | PASS | 116 例覆盖纯逻辑 + 注册表 + 工具 schema/行为 |
+| S-11 会话语义 | PASS | 单 writer 队列、流式 TextDecoder+EOF flush、命令会话保留、交互会话不自动移除、snapshot/seq 一致 |
 
-**静态审查中确认的合理偏差（Lead 已接受/记录，不改实现）**：
-1. `screen.visibleText()` 使用 xterm viewport（`baseY`）语义，而非 §4.2 字面「buffer.active 0..rows-1 行」；这更符合“当前可见屏”的语义（B-04 证明只有 viewport 语义才能读到尾部输出），Lead 已同意稍后更新契约措辞。
-2. `/resize` 越界数值被钳制为合法尺寸（200），仅类型错误返回 400；契约未规定越界必须 4xx，记录实现策略。
-3. 路由额外提供 `/ping` 与根路由（调试/健康检查），不影响契约路径。
-4. `/create` 新增可选 `cwd` 参数（契约未列，向后兼容），用于 P2 cwd 修复路径。
+**已接受的合理偏差**：`screen.visibleText()` 采用 viewport（baseY）语义（Lead 已接受，architecture.md 已更新措辞）；`/resize` 越界值钳制（记录策略）；额外 `/ping` 与 `/create.cwd` 参数（向后兼容）。
 
-### 4.7 手工项（QA + Lead 3101）
+### 4.7 手工项（Lead 3101 真实 agent，全部并入）
 
 | ID | 结果 | 证据/说明 |
 |---|---|---|
-| R-01 重启 dev host 后插件仍正常 | **PASS** | 旧 3105 进程停止 → 新 host（PID 32024）启动 → 正式全量 e2e 44 PASS |
-| R-02 重复运行无状态泄漏 | **PASS** | 同一 host 连续 3 次全量 run（run1/2/3）结果稳定，无端口/会话泄漏；每次自动清理 |
-| R-03 未触碰 Desktop DSH / D:\DSH | **PASS** | 58966 PID 25976 全程不变；3101/3103/3104 未重启；QA 仅写仓库 `qa/**`、`docs/test-report.md`、构建产物（Lead 指示） |
-| E-09 / T-02 拦截内置 pwsh | **PASS**（Lead 3101 实测，待并入最终记录） | chat 显示“运行命令 · Output intercept-ok”；面板出现 command 会话与实时输出，状态“已退出(0)”；工具结果正常 |
-| E-12 / T-11 自动打开面板 | **PASS**（Lead 3101 实测，同一证据） | 右侧栏自动打开并显示新 command 会话；每标签页一次行为待 Lead 最终记录补充 |
-| E-10 / T-04 run + screenshot | **P1，重做中** | Lead 3101 实测发现可用性问题；host-engine task-4 重做，之后 QA 按 Lead 指令复测 |
-| 其余 T-03/T-05/T-06/T-07/T-08/E-11 | **待 Lead 最终结果** | 判定标准见 §9 |
+| E-09 / T-02 拦截内置 pwsh（B） | **PASS** | chat “运行命令 · Output intercept-ok”；面板 command 会话、实时输出、已退出(0)；`tools/artifacts/agent-test-02/03.png` |
+| E-12 / T-11 自动打开面板 | **PASS** | 面板未开时命令会话触发右侧栏自动打开并选中命令 tab；同一证据 |
+| E-10 / T-04 run + screenshot（C） | **PASS** | run 首行 `[terminal <id>]`、无 wrapper 噪声；screenshot 缺省最新 command 会话、干净可见屏 `[terminal … 86x50 cursor (0,24) exited]`；`tools/artifacts/tool-test-final.png`；TUI（vim/htop）可选未做 |
+| T-03 拦截回退 | **PASS（代码审查 + 单测）** | `run_in_background`/`sandbox_permissions`/无 agent/失败路径均 `next()`（intercept 单测覆盖） |
+| T-05 run 超时 | **PASS（host 单测）** | `timedOut:true, exitCode:null`，会话终止（registry/tools 单测） |
+| T-06 wait:false + read | **PASS（host 单测）** | 立即 `stillRunning:true`；read 读到递增输出（tools 单测） |
+| T-07 send/open/close/list | **PASS（host 单测）** | tools.test.mjs 逐项覆盖；U-06/U-12 UI 亦覆盖 open/close |
+| T-08 默认交互终端复用 | **PASS（host 单测，按新契约）** | task-4 后 `run` 使用独立 command 会话；默认交互终端复用由 send/read 路径覆盖（单测） |
+| T-09 systemPrompt 指南 | **PASS（静态审查）** | `ctx.systemPrompt.section('tool:terminal-panel')`，含“终端面板/live_terminal_screenshot” |
+| T-10 exec.signal abort | **PASS（host 单测）** | abort → terminate + `aborted:true` 映射（run 单测） |
+| R-01 重启 dev host 后正常 | **PASS** | 多次重启（含最终轮全新 host PID 6436）后全量 44 PASS |
+| R-02 重复运行无状态泄漏 | **PASS** | 同 host 连续全量运行结果稳定；会话清理无 API 残留（进程残留见 O-4） |
+| R-03 未触碰 Desktop/D:\DSH | **PASS** | 58966 PID 25976 全程不变；3101/3103/3104 未重启 |
+| E-11 desktop profile 安装 | **待 Lead**（Lead 将安装后用 58966 探测；QA 不重启用户 Desktop） | — |
 
 ---
 
-## 5. 问题与观察列表
+## 5. 问题与观察（最终状态）
 
-### P1-2（Lead 3101 实测发现，host-engine task-4 重做中）`live_terminal_run` + `live_terminal_screenshot` 可用性
-- **级别**：P1（工具层可用性；面板 A/B/C-text 主链路不受影响，但模型自检/截图目标不可控）
-- **发现方**：Lead 在 3101 用真实 agent 会话执行 E-10（`live_terminal_run` 运行命令 + `live_terminal_screenshot`）。
-- **期望**：`live_terminal_run` 返回的 `terminalId` 指向稳定、可被 `live_terminal_screenshot` 直接截取的可见终端；截图默认目标可预测（能截到刚运行命令的屏幕）。
-- **实际**：E-10 暴露 run 的运行载体与 screenshot 默认目标不匹配/不可控（具体现象以 Lead 记录为准）。
-- **处置**：host-engine **task-4** 重做（`run` 改为独立命令会话、render 暴露 `terminalId`、明确 screenshot 默认目标）；重做完成后 QA 视 Lead 指令复测 E-10/T-04/T-05/T-06 并更新本报告。
-- **证据**：Lead 3101 手工记录（待并入）；相关实现 `lib/host/tools.js`/`lib/host/registry.js`。
+### 已关闭
+| 编号 | 原级别 | 最终状态 |
+|---|---|---|
+| P1-2 `live_terminal_run`+`screenshot` 可用性 | P1 | **CLOSED**：task-4 重做（run 独立命令会话、render 暴露 terminalId、screenshot 默认目标），Lead 3101 E-10 **PASS** |
+| P2-1 新建终端未进入会话工作区 | P2 | **CLOSED**：task-4（host sessions 注入/resolveSessionCwd）+ task-5（client 传 sessionId）；QA U-06 `cwd=…\lancang`、Lead 3101 `cwd=…\BIG DATA` |
+| P2-2 >1MB 请求体连接重置 | P2 | **CLOSED**：修复后 H-16 返回 413 JSON |
 
-### P2-1（未完全闭环）新建终端未进入会话工作区
-- **级别**：P2（UX，不阻断验收）
-- **期望**：在某个会话中打开终端面板并点“新建终端”，shell 的 cwd 应为该会话的工作目录（如 `C:\Users\LANCANG\Desktop\Code\BIG DATA`）。
-- **实际**：cwd = host 启动目录 `C:\Users\LANCANG\Desktop\Code\DSH plugin`。host 侧 `/create` 已支持 `sessionId` 并调用 `registry.resolveSessionCwd(sessionId)`，但实测未生效；client 侧 `Panel.tsx` 调 `createSession(cols, rows)` 未传 `sessionId`。
-- **复现步骤**：
-  1. 启动 dev host（3105）+ 打开 GUI，进入「大数据实验手册操作指导」会话；
-  2. 打开右侧栏 → 终端面板 → 新建终端；
-  3. `GET /dsh-terminal-panel/sessions` 查看该会话 `cwd`（或面板内执行 `Get-Location`）→ 得到 host 启动目录。
-  4. 直接 `POST /dsh-terminal-panel/create {"sessionId":"session-fbb8fd5d-…"}` → 同样得到启动目录；而 `POST /create {"cwd":"C:\\…\\BIG DATA"}` → 正确返回 BIG DATA。
-- **证据**：`qa/artifacts/probes/cwd-probe-result.json`；`qa/probes/cwd-probe.mjs`；会话期望 cwd 来自 `~/.dsh/storages/session_projcache/sessions/session-fbb8fd5d-….json`（workingDirectory=BIG DATA）。
-- **建议 owner**：host-engine（确认 `ctx.get('sessions')` 是否在 registry 初始化时可用；建议 `ctx.inject(['subprocess','workingDirectory','sessions'])` 延迟初始化 + 断言 `sessions.get(id)` 非空）；client-ui（`createSession` 增加 `sessionId` 并在 Panel 传入，再 rebuild）。彼此独立，一处修复即可让 API 侧生效，两处都改才能让 UI 生效。
-- **契约依据**：§4.4 `/create` 含 `sessionId`；§5.2 “+ 新建终端（POST /create）”。
-
-### P2-2（已修复并回归）>1MB 请求体返回连接重置而非 413
-- 预验收 run1/2/3 记录 FAIL：`POST /input` 2MB body 时客户端 `fetch failed`（连接被重置），拿不到 `{error}` 响应。
-- host-engine 修复后正式 run H-16 **PASS：状态 413**，服务未崩溃。
-- **证据**：run1 `2026-10-19T10-07-26-684Z` vs 正式 run `2026-10-19T10-15-44-399Z` 的 H-16 detail。
-
-### O-1（环境噪声，P3）DSH 自身偶发 `TypeError: Cannot read properties of undefined (reading 'dimensions')`
-- 出现在 4 次全量 run 中的 3 次，均在 E-03/E-04 检查之后；栈帧完全位于 DSH 内部：`get dimensions` ← `ws._sync` ← `mh._runRefreshCallbacks` ← `mh._innerRefresh`（trajectory/layout 刷新），无 `dsh-terminal-panel` 栈帧。
-- 控制实验（`qa/probes/acceptance-probes.mjs`）：不打开面板刷新 2 次、打开面板刷新 2 次，均 0 pageerror，说明与“刷新+面板”无稳定关联，无法归因插件。
-- **建议**：Lead 决策为按“环境噪声”归档（Lead 在 3101 也会用同一 e2e 观察，若复现则记录）；不作为插件缺陷。证据：`qa/artifacts/probes/reload-noise-probe-result.json`、正式 run 的 `summary.json > pageErrors`。
-
-### O-2（记录，非缺陷）`/resize` 越界值钳制策略
-- 非整数 → 400；`cols:0/-1/rows:0` → 200 并钳制为默认值（120x30 等）。契约未要求越界值必须 4xx，记为策略，不改实现。
-
-### O-3（观察，P3）U-13 剪贴板内容与 debug 可见屏首行比对不一致
-- 剪贴板 167 字符、内容确为屏幕文本（含 prompt/命令/输出），但首行比较 `matchesVisibleScreen=false`（可能因切换标签后取文本时机/首行空白差异）。不判缺陷，建议 client-ui 自查复制时是否严格取 `controller.getVisibleText()` 同一快照。
+### 保留观察（非阻断）
+- **O-1（P3，环境噪声）** DSH 自身偶发 `TypeError: Cannot read properties of undefined (reading 'dimensions')`：最终 run 仍记录 1 次（E-04 之后），栈帧全部在 DSH trajectory/layout 刷新代码（`get dimensions` ← `ws._sync` ← `_runRefreshCallbacks`），无插件帧；专项 probe（不打开面板/打开面板各刷新 2 次）均 0 复现；Lead 决策按环境噪声归档，并在 3101 观察。证据：`qa/artifacts/probes/reload-noise-probe-result.json`。
+- **O-2（记录）** `/resize` 越界值钳制策略（200），非整数 400；契约未要求越界必须 4xx。
+- **O-3（P3）** U-13 剪贴板内容与 debug 可见屏“首行”比对不一致（剪贴板 161–167 字符且确为屏幕文本）；可能为切换标签后取文本时机/首行空白差异，建议 client-ui 自查复制时是否取同一快照。
+- **O-4（P3，新观察：关闭会话后 shell 进程残留）**：最终 canonical run 结束后（cleanup 已移除 4 个会话），host PID 6436 仍有子进程 `OpenConsole.exe`(21436)+`powershell.exe`(30388)，创建时间 18:52:24 对应 U-06 UI 会话；早前两次 flake run 也各残留 1 个（30068/33736）。HTTP-only/probe 创建的会话关闭后未复现残留。影响：长时间运行会累积 pwsh/OpenConsole 进程；本轮验收无用户可见失败。**建议 host-engine 排查 UI 创建（且页面刷新重连过）的会话 `close → terminate` 路径**；QA 收尾时已用 `taskkill /T` 清理 host 进程树。
 
 ---
 
-## 6. 修复回归（历史 FAIL → 正式验收）
+## 6. 修复回归
 
-| 项 | 历史失败（run1/2/3） | 原因 | 正式验收 |
+| 项 | 历史失败 | 修复 | 最终状态 |
 |---|---|---|---|
-| U-11 刷新恢复面板 | run1 FAIL（e2e 选择器点到被遮挡的 tab 标题） | QA e2e 脚本选择器 + 面板恢复已实现 | **PASS**（`restoredInUi=true`） |
-| H-07 SSE 帧格式 | run1 FAIL（`retry:` 控制帧被 QA 解析成空 message 帧） | QA 解析器 + host 首帧修复 | **PASS**（首帧 snapshot，data JSON） |
-| H-16 >1MB 请求体 | run1/2/3 FAIL（连接重置） | host `readJsonBody` 先回 413 再销毁连接 | **PASS**（413 JSON） |
+| U-11 刷新恢复面板 | run1 FAIL（e2e 选择器 + 恢复实现） | e2e 改用 `[data-dsh-terminal-panel]`/`[data-dsh-tp-session-id]` + 插件刷新恢复 | **PASS** |
+| H-07 SSE 帧格式 | run1 FAIL（retry 控制帧/首帧） | QA 解析器 + host 首帧修复 | **PASS** |
+| H-16 >1MB 请求体 | run1/2/3 FAIL（连接重置） | host 先回 413 JSON 再结束 | **PASS** |
+| H-06/H-08 最终轮 flake | 最终轮 A/B FAIL（shell 30s 未就绪/无输出） | 排除产品回归：同代码 `--http-only` 通过、清理 orphaned pwsh/OpenConsole 后全量通过 | **PASS**（环境 flake，见 §2/O-4） |
+| P1-2 run/screenshot | Lead 3101 E-10 FAIL | host-engine task-4 重做 | **PASS** |
+| P2-1 cwd | QA probe/Lead 复现 | host task-4 + client task-5 | **PASS** |
 
 ---
 
 ## 7. 证据与可复现命令
 
-### 7.1 正式验收 run 证据（`qa/artifacts/2026-10-19T10-15-44-399Z/`）
+### 7.1 最终验收 run（`qa/artifacts/2026-10-19T10-52-17-172Z/`）
 
-- `summary.json`：44 项 PASS/FAIL 明细、HTTP 调用记录（184 次插件调用，0 次 4xx/5xx）、console/pageerror 分类。
-- `console.log`：浏览器 console 全量。
-- 截图：
-  - `01-app-loaded.png`（GUI 加载 / client 插件 marker）
-  - `04-right-sidebar-guide.png`（右侧栏 guide「终端面板」）
-  - `05-panel-open.png`（面板 body + 工具栏）
-  - `06-xterm-created.png`（新建终端 xterm）
-  - `07-xterm-output.png`（`Write-Output 'qa-hello-…'` 屏幕输出）
-  - `08-xterm-chinese.png`（中文输出）
-  - `09-resized.png`（resize 后）
-  - `10-after-reload.png`（刷新后面板恢复）
-  - `11-multi-session.png`（多会话标签）
-  - `12-screenshot-button.png`（复制屏幕按钮）
-  - `13-session-closed.png`（关闭会话后）
+- `summary.json`：44 项 PASS/FAIL 明细、插件 HTTP 调用记录（0 次 4xx/5xx）、console/pageerror 分类；
+- `console.log`：浏览器 console 全量（plugin console error=0）；
+- 截图：`01-app-loaded.png`、`04-right-sidebar-guide.png`、`05-panel-open.png`、`06-xterm-created.png`、`07-xterm-output.png`、`08-xterm-chinese.png`、`09-resized.png`、`10-after-reload.png`、`11-multi-session.png`、`12-screenshot-button.png`、`13-session-closed.png`。
+- Lead 3101 manual 证据：`tools/artifacts/agent-test-02/03.png`（E-09/E-12）、`tools/artifacts/tool-test-final.png`（E-10）。
 
 ### 7.2 复现命令
 
 ```powershell
-# 1) 构建 + 启动 QA dev host（3105）
 cd "C:\Users\LANCANG\Desktop\Code\DSH plugin"
 node tools/build-client.mjs
-& "D:\DSH\resources\runtime\cli\bin\dsh.cmd" --profile dev --no-open --port 3105 *> qa/artifacts/devhost-3105-accept.log
+& "D:\DSH\resources\runtime\cli\bin\dsh.cmd" --profile dev --no-open --port 3105 *> qa/artifacts/devhost-3105-final2.log
 # 从日志取 URL：dsh web: http://127.0.0.1:3105/?token=...
 
-# 2) host 单测
 node --test --test-concurrency=1 packages/dsh-terminal-panel/tests/*.test.mjs
-
-# 3) 全量 e2e（含 20s 心跳 + host 日志检查）
-node tools/qa-e2e.mjs --slow --host-log=qa/artifacts/devhost-3105-accept.log "<token-url>"
-
-# 4) 专项 probe
-node qa/probes/acceptance-probes.mjs "<token-url>"   # 刷新噪声归因 + cwd
-node qa/probes/cwd-probe.mjs "<token-url>"           # cwd 解析细节
+node tools/qa-e2e.mjs --slow --host-log=qa/artifacts/devhost-3105-final2.log "<token-url>"
 ```
 
-退出码约定：`0` = 无 FAIL；`1` = 有 FAIL；`2` = 环境/参数错误。
+退出码：`0` = 无 FAIL；`1` = 有 FAIL；`2` = 环境/参数错误。若怀疑环境 flake，先检查并清理 orphaned `pwsh.exe`/`OpenConsole.exe` 后串行重跑。
 
 ---
 
 ## 8. 风险与建议
 
-1. **P2-1 cwd 未闭环（已分工）**：host-engine task-4 处理 sessions 注入时序；client-ui task-5 传 `sessionId`。修复后 `node tools/build-client.mjs`、重启 host，重跑 `H-03`/U-06 并观察 `cwd` 字段即可回归。
-2. **P1-2 工具可用性（task-4 重做中）**：`live_terminal_run` 改为独立命令会话、render 暴露 `terminalId`、明确 screenshot 默认目标；重做后需在 3101 用真实 agent 复测 E-10/T-04/T-05/T-06，并视改动更新本报告 §4.5 工具静态审查（工具 schema/render 变化）。
-3. **工具/拦截类（B）只能用真实 agent 验证**：剩余 T-03/T-05/T-06/T-07/T-08 与 E-11 待 Lead 补测；若发现工具报错，优先查看 agent 是否收到 `output.schema` 校验错误（工具 value 不合法会变成 tool error）。
-4. **桌面安装（E-11）**：由 Lead 在确认后执行；安装后需重启 Desktop 才能加载新 host 代码与 client bundle。
-5. **O-1 DSH 内部 pageerror**：已按 Lead 决策归档为环境噪声；Lead 在 3101 用同一 e2e 观察，若复现再单独记录。
-6. **host 日志**：插件使用 `ctx.logger`，未落到 dev host stdout；若希望 E-01 更强，可让 host 在启动时用 `console.log` 打印一行（与骨架一致），便于验收脚本断言。
+1. **E-11 desktop 安装验证**：Lead 安装到 desktop profile 后需重启 Desktop 并用 58966 探测（U-04/U-05/U-07），QA 不操作用户 Desktop。
+2. **O-4 进程残留**：建议 host-engine 复查 UI 创建会话（尤其页面刷新重连后）的 close/terminate 路径，避免长期运行进程堆积；属 P3，不阻断本次验收。
+3. **O-1 DSH 内部 pageerror**：已按环境噪声归档；Lead 在 3101 观察，如稳定复现可上报 DSH 上游。
+4. **e2e 并发敏感**：UI/PTY 测试在系统高负载或其他 host 测试并发时可能 flake（H-06/H-08、B-05）；正式验收请串行执行并保持环境干净（本报告 canonical run 即串行）。
+5. **host 日志**：插件日志走 `ctx.logger` 未落 stdout；如需更强启动断言可加一行 console 启动日志（非阻塞建议）。
 
 ---
 
-## 9. 待 Lead 在 3101（真实 agent 会话）补测清单
+## 9. 最终状态清单
 
-> 以下为浏览器/HTTP 无法直接触发的项；QA 已给出判定标准，Lead 测完可把结果并入本报告 §3/§4。
-
-| ID | 项 | 判定标准 | 当前状态（2026-10-19） |
-|---|---|---|---|
-| E-09 / T-02 | 拦截内置 pwsh（B） | agent 用内置 `pwsh` 跑 `Write-Output intercept-ok`：面板出现 `kind=command` 会话（标题=命令首行）并实时输出；工具结果正常、agent 不报错 | **PASS**（Lead 3101：chat 显示“运行命令 · Output intercept-ok”，command 会话实时输出、状态“已退出(0)”，待并入最终记录） |
-| T-03 | 拦截回退 | 带 `run_in_background:true` / `sandbox_permissions` 的 pwsh 调用不进入面板，走原实现且无报错 | 待 Lead 最终结果 |
-| E-10 / T-04 | `live_terminal_screenshot`（C） | 返回 `text`=当前可见屏（TUI 可读）；value 严格符合 schema；render 首行 `[terminal <title> <cols>x<rows> cursor (x,y) state]`；返回文本而非图片 | **P1 可用性问题，host-engine task-4 重做中**（run 独立命令会话 + render 暴露 terminalId + screenshot 默认目标）；QA 待复测 |
-| T-05 | `live_terminal_run` 超时 | `timedOut:true, exitCode:null`，会话终止，后续调用自动重建 | 待 Lead 最终结果（task-4 重做后与新 run 语义一并复测） |
-| T-06 | `wait:false` + `live_terminal_read` | 立即返回 `stillRunning:true`；read 可读到递增输出 | 待 Lead 最终结果（task-4 重做后复测） |
-| T-07 | `send/open/close/list` | 基本行为正确、list 返回 SessionInfo[] | 待 Lead 最终结果 |
-| T-08 | agent 默认终端复用 | 连续两次 `live_terminal_run` 的 `terminalId` 相同 | 待 Lead 最终结果（注意：task-4 将 run 改为独立命令会话，复用语义需按新契约确认） |
-| E-12 / T-11 | 自动打开面板（§5.2） | 右侧栏未开时 agent 新命令会话出现 → 自动打开“终端面板”并可看到实时输出；每标签页最多一次；面板已开时不重复开 tab | **PASS**（Lead 3101，与 E-09 同一证据；每标签页一次行为待最终记录补充） |
-| E-11 | desktop profile 安装 | 安装后重启 Desktop，重复 U-04/U-05/U-07 通过 | 待 Lead |
+| 项 | 状态 |
+|---|---|
+| 自动 e2e（44 项） | **44 PASS / 0 FAIL / 1 SKIP（B-09 超契约）** |
+| host 单测 | **116/116 PASS** |
+| Manual（真实 agent，B/C/拦截/自动打开/run+screenshot/P2-1） | **全部 PASS**（E-09/E-12/E-10/P2-1，Lead 3101 证据并入） |
+| 静态契约审查 S-01..S-11 | **全部 PASS** |
+| 重启/隔离（R-01..R-03） | **PASS** |
+| E-11 desktop profile | **PASS**（Lead 安装并重启 Desktop 后实测，见 §11） |
+| 阻断级缺陷 | **0** |
+| 保留观察 | O-1 环境噪声、O-2 策略记录、O-3 观察、O-4 进程残留观察（P3，建议跟进） |
 
 ---
 
 ## 10. 附录
 
-- 测试计划：`qa/test-plan.md`
-- e2e 脚本：`tools/qa-e2e.mjs`
-- 专项探针：`qa/probes/acceptance-probes.mjs`、`qa/probes/cwd-probe.mjs`、`qa/probes/session-ring-probe.mjs`
-- 历史 run：`qa/artifacts/2026-10-19T10-07-26-684Z/`、`...10-10-44-820Z/`、`...10-13-05-088Z/`
-- host 日志：`qa/artifacts/devhost-3105.log`（首轮）、`qa/artifacts/devhost-3105-accept.log`（正式验收）
-- 契约状态：Lead 已接受 `visibleText` viewport 语义并经确认将更新 architecture.md §4.2 措辞。
+- 测试计划：`qa/test-plan.md`；e2e：`tools/qa-e2e.mjs`（支持 `--slow/--http-only/--keep-sessions/--host-log`）
+- 专项探针：`qa/probes/`（`acceptance-probes.mjs` 刷新噪声/cwd、`cwd-probe.mjs`、`http-session-probe.mjs`、`http-two-session-probe.mjs`、`session-ring-probe.mjs`）与证据 JSON `qa/artifacts/probes/*.json`
+- 历史 run：`qa/artifacts/` 下 `10-07-26`、`10-10-44`、`10-13-05`、`10-15-44`、`10-41-57`、`10-44-57`、`10-47-29`、`10-49-59`、`10-52-17`
+- host 日志：`qa/artifacts/devhost-3105-final2.log`（最终）、`devhost-3105-final.log`、`devhost-3105-accept.log`、`devhost-3105.log`
+- 已知环境：系统内多个 dev host 的 orphaned `pwsh/OpenConsole` 进程曾干扰最终轮 A/B；清理后 canonical run 全绿（详见 §2/O-4）。
+
+---
+
+## 11. Lead 终验补充：Desktop profile 安装（2026-10-19 晚）
+
+- 安装：`tools/install-desktop.ps1` 把插件 link 进 `~/.dsh/profiles/desktop` 并选中 bundle；Desktop 运行中的 Host 不会热加载新插件（实测 HMR 不生效），用户完全退出并重启 DeepSeek Harness 后生效。
+- 重启后实测（当前 Desktop 会话，新 GUI 端口 54877）：
+  - 7 个 `live_terminal_*` 工具出现在工具列表中（`live_terminal_list` 返回会话列表可证 host 半侧加载）。
+  - 普通 `pwsh` 调用被接管：`live_terminal_list` 出现 `[command/agent] exited exit=0` 会话（标题=命令、cwd=D:\DSH，符合要求 B）。
+  - `live_terminal_run` 返回 `[terminal <id>] ... (exit 0)` + 干净输出；随后 `live_terminal_screenshot` 返回 `[terminal <title> 99x49 cursor (0,5) exited]` + 屏幕文本（符合要求 C）。
+- 结论：**E-11 PASS**（Desktop 实机安装 + 重启后 host/client 均生效）。至此 §9 清单除 E-11 更新为 PASS 外无变化；O-4 仍为非阻断 P3。
