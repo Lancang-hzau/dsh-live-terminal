@@ -20,6 +20,8 @@
 - ✅ 单测 116/116、独立 e2e 44 PASS、Desktop 实机验证通过
 - ✅ `screenshots.json`、`icon.svg`、`README.md`、CI workflow、catalog 条目样例已就绪
 - ✅ **GitHub 仓库已建好并推送**：<https://github.com/Lancang-hzau/dsh-live-terminal>（public，tag `v1.0.0`；topics 已加 `dsh-plugin`/`dsh`/`deepseek-harness`/`cordis`/`terminal`/`pty`/`xterm`/`agent-tools`）
+- ✅ **GitHub Release `v1.0.0` 已创建**，附 npm tarball 资产：<https://github.com/Lancang-hzau/dsh-live-terminal/releases/tag/v1.0.0>（`tools/create-github-release.mjs` 可重复用于后续版本）
+- ✅ **CI 已绿**：`.github/workflows/ci.yml` 改为 `windows-latest` 后 run #3 success（host 单测断言 Windows 路径/argv 语义，Linux runner 会误报）
 - ✅ README 里引用的截图 raw URL 已验证可访问（200）；仓库无密钥/恢复码等敏感文件
 - ✅ **catalog PR 已准备好**：fork `Lancang-hzau/awesome-dsh-plugin` 已有分支 `add-dsh-live-terminal`（含 `data/plugins/Lancang-hzau__dsh-live-terminal.yml`）
 - ⏳ **catalog 仓库年龄门槛**：插件仓库创建于 `2026-10-19T11:35:41Z`，最早可提 PR 时间 **2026-10-20 19:35（Asia/Shanghai）**；到点运行 `node tools/open-catalog-pr.mjs --create` 即可（脚本会自动检查门槛并开 PR）
