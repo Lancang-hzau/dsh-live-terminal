@@ -19,12 +19,16 @@
 - ✅ 用全新 DSH profile 从 npmjs 安装 `dsh-live-terminal@1.0.0` 并启动验证通过（host 路由 + client UI）
 - ✅ 单测 116/116、独立 e2e 44 PASS、Desktop 实机验证通过
 - ✅ `screenshots.json`、`icon.svg`、`README.md`、CI workflow、catalog 条目样例已就绪
+- ✅ **GitHub 仓库已建好并推送**：<https://github.com/Lancang-hzau/dsh-live-terminal>（public，tag `v1.0.0`；topics 已加 `dsh-plugin`/`dsh`/`deepseek-harness`/`cordis`/`terminal`/`pty`/`xterm`/`agent-tools`）
+- ✅ README 里引用的截图 raw URL 已验证可访问（200）；仓库无密钥/恢复码等敏感文件
+- ✅ **catalog PR 已准备好**：fork `Lancang-hzau/awesome-dsh-plugin` 已有分支 `add-dsh-live-terminal`（含 `data/plugins/Lancang-hzau__dsh-live-terminal.yml`）
+- ⏳ **catalog 仓库年龄门槛**：插件仓库创建于 `2026-10-19T11:35:41Z`，最早可提 PR 时间 **2026-10-20 19:35（Asia/Shanghai）**；到点运行 `node tools/open-catalog-pr.mjs --create` 即可（脚本会自动检查门槛并开 PR）
 - ⚠️ 早期为绕过 npm 审核卡住状态额外 staged 了 `1.0.1`（stage id `42e272a2-4d53-43ac-aded-151ace82a3bd`，状态 `staged`）——**不需要它**，建议在 npm 网页 Staged Packages 里点 **Reject**；仓库版本已回退为 `1.0.0`。
 - ⚠️ npm 上保留着 `0.0.0-stage` 占位版本（staged publishing 机制产物），不影响安装；可稍后在网页删除。
-- ⬜ **GitHub 仓库尚不存在**（`https://github.com/Lancang-hzau/dsh-live-terminal` 目前 404）
-- ⬜ **catalog PR 未提交**（catalog 要求仓库存在且创建满 1 天）
 
 > 注：npm 2026-10 起新包首版走 staged publishing——发布进入队列后需要维护者 2FA 批准。本项目 1.0.0 已通过该流程正式上线；下面的 §2.1 保留给以后新包的 staged 发布参考。
+>
+> CI 说明：host 单测断言 Windows 路径/argv 语义，因此 `.github/workflows/ci.yml` 使用 `windows-latest` 运行（不是 Linux），与本地 116/116 一致。
 
 ---
 
