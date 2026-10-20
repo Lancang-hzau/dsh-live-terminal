@@ -330,4 +330,4 @@ node tools/qa-e2e.mjs --slow --host-log=qa/artifacts/devhost-3105-final2.log "<t
 | Desktop 切换 npm 安装 | 已定位根因（临时 profile 复现）：profile 仍有 `link:` junction 时执行 `dsh plugin add`（link→npm），pnpm 因 `EPERM rename` 失败，失败清理会**删除被链接仓库 `.git` 顶层的 HEAD/config/index/logs/COMMIT_EDITMSG 等**（objects/refs/ORIG_HEAD 残留）——仓库两次 `.git` 损坏均由此类切换尝试造成。规避：`tools/switch-desktop-to-npm.ps1` 先安全 `rmdir` junction 再安装，失败自动恢复本地 link；临时 profile 已验证该顺序安装成功且仓库 `.git` 未动。需完全退出 DSH 后运行 |
 | 独立验证 | host 行为 **41/41** + notice 模式 **3/3** PASS；client `parseTerminalNotice` **5/5**；发现并修复「先建会话后连 SSE 的 `sessions` 事件抑制」P2 边界（含回归测试） |
 
-- 结论：v1.2.0 已发布（npm + GitHub Release）；自动清理行为在真实 Desktop 中验证通过；Desktop profile 由 `link:` 切到 npm 安装需要在 DSH 完全退出后执行 `tools/switch-desktop-to-npm.ps1`。
+- 结论：v1.2.0 已发布（npm + GitHub Release）；自动清理行为在真实 Desktop 中验证通过；Desktop profile 已于 2026-10-20 切换到 npm 安装的 1.2.0（非 junction，client sha `71E945EF…`）；插件市场 catalog PR **#8299** 已提交，Submission gate 与 PR check 全部通过、mergeable clean，等待维护者合并。

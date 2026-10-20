@@ -23,10 +23,10 @@
 - ✅ **GitHub 仓库已建好并推送**：<https://github.com/Lancang-hzau/dsh-live-terminal>（public；topics 已加 `dsh-plugin`/`dsh`/`deepseek-harness`/`cordis`/`terminal`/`pty`/`xterm`/`agent-tools`）
 - ✅ **GitHub Release `v1.2.0` 已创建**，附 npm tarball 资产：<https://github.com/Lancang-hzau/dsh-live-terminal/releases/tag/v1.2.0>（历史版本见 <https://github.com/Lancang-hzau/dsh-live-terminal/releases>）
 - ✅ **CI 门禁**：`windows-latest` Node 22/24 全量（含 bundle freshness `git diff --exit-code -- lib/client.js`）+ `ubuntu-latest` Node 24 平台无关子集；v1.2.0 提交 `f20c836` 触发的 run 见 <https://github.com/Lancang-hzau/dsh-live-terminal/actions>
-- ⏳ **Desktop profile 当前仍是 `link:` 指向本仓库**（`node_modules/dsh-live-terminal` 是 junction）。**重要**：已用临时 profile 复现——在 junction 仍存在时执行 `dsh plugin add`（link→npm），pnpm 会因 `EPERM rename` 失败，且其失败清理会**删除被链接仓库 `.git` 顶层的 HEAD/config/index/logs 等元数据**（objects/refs/ORIG_HEAD 残留）。因此 `tools/switch-desktop-to-npm.ps1` 会**先安全 `rmdir` 掉 junction**（只删 reparse point，不动仓库目录），再安装 npm 包；已在临时 profile 验证该顺序安装成功且仓库 `.git` 完全未动，失败会自动恢复本地 link。操作步骤：**完全退出 DeepSeek Harness** → 仓库根目录运行脚本 → 重新打开 DSH；`-RestoreLink` 可切回本地链接。
+- ✅ **Desktop profile 已切换到 npm 安装的 1.2.0**（`node_modules/dsh-live-terminal` 为真实 npm 目录、非 junction；client bundle sha256 `71E945EF…C92E33`）。历史注意：此前 profile 还是 `link:` 时，在 junction 仍存在的情况下执行 `dsh plugin add`（link→npm）会因 `EPERM rename` 失败，且 pnpm 的失败清理会**删除被链接仓库 `.git` 顶层的 HEAD/config/index/logs 等元数据**（已在临时 profile 复现）。`tools/switch-desktop-to-npm.ps1` 已实现**先安全 `rmdir` junction 再安装**，并在临时 profile 验证该顺序安装成功、仓库 `.git` 完全未动；失败会自动恢复本地 link。`-RestoreLink` 可切回本地链接。
 - ✅ README 里引用的截图 raw URL 已验证可访问（200）；仓库无密钥/恢复码等敏感文件
-- ✅ **catalog PR 已准备好**：fork `Lancang-hzau/awesome-dsh-plugin` 已有分支 `add-dsh-live-terminal`（含 `data/plugins/Lancang-hzau__dsh-live-terminal.yml`）
-- ⏳ **catalog 仓库年龄门槛**：插件仓库创建于 `2026-10-19T11:35:41Z`，最早可提 PR 时间 **2026-10-20 19:35（Asia/Shanghai）**；到点运行 `node tools/open-catalog-pr.mjs --create` 即可（脚本会自动检查门槛并开 PR）
+- ✅ **catalog PR 已提交**：fork `Lancang-hzau/awesome-dsh-plugin` 分支 `add-dsh-live-terminal`（`data/plugins/Lancang-hzau__dsh-live-terminal.yml`）→ **PR #8299** <https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/8299>
+- ✅ **catalog 年龄门槛已通过**：插件仓库创建于 `2026-10-19T11:35:41Z`，24h 门槛于 **2026-10-20 19:35:41（Asia/Shanghai）** 到达，PR 于 19:36 提交；`Submission gate` 与 `PR check`（README 同步、awesome-lint、日期/能力/讨论/路径测试、站点构建）**全部通过**，mergeable_state=clean，等待维护者 review/合并。首次提交曾因条目文件带 UTF-8 BOM 被 js-yaml 5.3.0 拒绝，已去除 BOM 后通过。
 - ⚠️ 早期为绕过 npm 审核卡住状态额外 staged 了 `1.0.1`（stage id `42e272a2-4d53-43ac-aded-151ace82a3bd`，状态 `staged`）——**不需要它**，建议在 npm 网页 Staged Packages 里点 **Reject**；仓库版本已回退为 `1.0.0`。
 - ⚠️ npm 上保留着 `0.0.0-stage` 占位版本（staged publishing 机制产物），不影响安装；可稍后在网页删除。
 
