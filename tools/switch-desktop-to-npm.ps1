@@ -8,10 +8,14 @@
 #
 # Note on junctions: a `link:` dependency is installed as a Windows junction.
 # pnpm replaces packages by renaming a temp directory over the old entry, which
-# fails with EPERM when the destination is an existing junction. The script
-# therefore removes the junction first (rmdir deletes only the reparse point;
-# the linked repo directory is never modified) and restores the link if the
-# install fails.
+# fails with EPERM when the destination is an existing junction. Worse, the
+# failed-install cleanup deletes top-level entries of the linked repo's .git
+# (HEAD, config, index, logs, ...); this was reproduced with a temp profile and
+# is what corrupted this repository's git metadata during earlier switch
+# attempts. The script therefore removes the junction first (rmdir deletes only
+# the reparse point; the linked repo directory is never modified) and restores
+# the link if the install fails. Removing the junction first makes the install
+# succeed (verified with a temp profile copy).
 #
 # Usage (from the repo root, with DSH closed):
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\switch-desktop-to-npm.ps1

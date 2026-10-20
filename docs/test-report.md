@@ -327,7 +327,7 @@ node tools/qa-e2e.mjs --slow --host-log=qa/artifacts/devhost-3105-final2.log "<t
 | 真实 Desktop 行为检查 | 成功命令自动关闭（5s 后列表清空）、失败命令 2s 自动关闭、`keepOpen` 会话跨 7s+ 仍保留、`live_terminal_run` 结果显示自动关闭提示；实测被接管 PowerShell 启动开销约 **3.3–3.9s**，据此把默认 `interceptMinVisibleMs` 从 1000 调到 **4500ms**（含启动开销，快速命令默认完全不上屏），并补默认阈值单测 |
 | npm 发布 | `dsh-live-terminal@1.2.0` 已发布（latest）：18 files、tarball 148,585 B、shasum `393f2407ea7bd6b287163ada329d89be5fbe1d21`；从 registry 下载的包内 `lib/client.js` sha256 与本地构建一致 |
 | GitHub Release | `v1.2.0` Release 已创建并上传 npm tarball 资产（tag `v1.2.0` → `f20c836`） |
-| Desktop 切换 npm 安装 | 两个障碍：① 运行中的 DSH 锁住 profile 的 `node_modules/dsh-live-terminal`；② pnpm 用 rename 覆盖已有的 `link:` junction 会 `EPERM`（已用临时目录复现：rename-over-junction 失败，`rmdir` junction 安全且不动目标目录）。`tools/switch-desktop-to-npm.ps1` 已改为先安全移除 junction、清理失败残留、再安装 npm 包并校验，失败自动恢复本地 link；需完全退出 DSH 后运行 |
+| Desktop 切换 npm 安装 | 已定位根因（临时 profile 复现）：profile 仍有 `link:` junction 时执行 `dsh plugin add`（link→npm），pnpm 因 `EPERM rename` 失败，失败清理会**删除被链接仓库 `.git` 顶层的 HEAD/config/index/logs/COMMIT_EDITMSG 等**（objects/refs/ORIG_HEAD 残留）——仓库两次 `.git` 损坏均由此类切换尝试造成。规避：`tools/switch-desktop-to-npm.ps1` 先安全 `rmdir` junction 再安装，失败自动恢复本地 link；临时 profile 已验证该顺序安装成功且仓库 `.git` 未动。需完全退出 DSH 后运行 |
 | 独立验证 | host 行为 **41/41** + notice 模式 **3/3** PASS；client `parseTerminalNotice` **5/5**；发现并修复「先建会话后连 SSE 的 `sessions` 事件抑制」P2 边界（含回归测试） |
 
 - 结论：v1.2.0 已发布（npm + GitHub Release）；自动清理行为在真实 Desktop 中验证通过；Desktop profile 由 `link:` 切到 npm 安装需要在 DSH 完全退出后执行 `tools/switch-desktop-to-npm.ps1`。

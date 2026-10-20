@@ -45,7 +45,7 @@ dsh plugin --profile web add dsh-live-terminal
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\switch-desktop-to-npm.ps1
 ```
 
-脚本会先检测 DSH 是否仍在运行（运行中会被文件锁挡住并直接退出），然后把 Desktop profile 的依赖换成 npm 上的版本并校验安装结果；加 `-RestoreLink` 可切回本地链接。
+脚本会先检测 DSH 是否仍在运行（运行中会被文件锁挡住并直接退出），并**先安全移除 profile 里的 `link:` junction**（规避 DSH/pnpm 在 link→npm 替换失败时清理删除被链接仓库 `.git` 元数据的问题；只删 reparse point，不动仓库目录），再把 Desktop profile 的依赖换成 npm 上的版本并校验安装结果；失败会自动恢复本地 link，加 `-RestoreLink` 可手动切回本地链接。
 
 ## 使用
 
