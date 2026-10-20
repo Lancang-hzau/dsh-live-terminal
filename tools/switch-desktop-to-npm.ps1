@@ -10,12 +10,14 @@
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\switch-desktop-to-npm.ps1
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\switch-desktop-to-npm.ps1 -RestoreLink
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\switch-desktop-to-npm.ps1 -Version 1.2.0
+#   powershell -NoProfile -ExecutionPolicy Bypass -File tools\switch-desktop-to-npm.ps1 -DryRun
 #
 # Kept ASCII-only: Windows PowerShell 5.1 reads BOM-less .ps1 as ANSI.
 
 param(
   [string]$Version = '1.2.0',
-  [switch]$RestoreLink
+  [switch]$RestoreLink,
+  [switch]$DryRun
 )
 
 $ErrorActionPreference = 'Stop'
@@ -26,6 +28,13 @@ $dshHome = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $env:USERPROFIL
 $manifestPath = Join-Path $dshHome 'profiles\desktop\package.json'
 $installedPath = Join-Path $dshHome 'profiles\desktop\node_modules\dsh-live-terminal'
 
+$target = if ($RestoreLink) { "link:$($repoPath -replace '\\', '/')" } else { "dsh-live-terminal@$Version" }
+if ($DryRun) {
+  Write-Host "target: $target"
+  Write-Host "command: `"$dsh`" plugin --profile desktop add `"$target`" --registry=https://registry.npmjs.org"
+  exit 0
+}
+
 $running = Get-Process -Name 'DeepSeek Harness' -ErrorAction SilentlyContinue
 if ($running) {
   Write-Host 'DeepSeek Harness is running. Fully quit it first, then re-run this script.'
@@ -34,7 +43,6 @@ if ($running) {
   exit 2
 }
 
-$target = if ($RestoreLink) { "link:$($repoPath -replace '\\', '/')" } else { $Version }
 Write-Host "[1/3] setting dsh-live-terminal dependency to: $target"
 & $dsh plugin --profile desktop add $target --registry=https://registry.npmjs.org
 if ($LASTEXITCODE -ne 0) { throw "dsh plugin add failed with exit code $LASTEXITCODE" }
