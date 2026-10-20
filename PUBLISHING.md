@@ -23,7 +23,7 @@
 - ✅ **GitHub 仓库已建好并推送**：<https://github.com/Lancang-hzau/dsh-live-terminal>（public；topics 已加 `dsh-plugin`/`dsh`/`deepseek-harness`/`cordis`/`terminal`/`pty`/`xterm`/`agent-tools`）
 - ✅ **GitHub Release `v1.2.0` 已创建**，附 npm tarball 资产：<https://github.com/Lancang-hzau/dsh-live-terminal/releases/tag/v1.2.0>（历史版本见 <https://github.com/Lancang-hzau/dsh-live-terminal/releases>）
 - ✅ **CI 门禁**：`windows-latest` Node 22/24 全量（含 bundle freshness `git diff --exit-code -- lib/client.js`）+ `ubuntu-latest` Node 24 平台无关子集；v1.2.0 提交 `f20c836` 触发的 run 见 <https://github.com/Lancang-hzau/dsh-live-terminal/actions>
-- ⏳ **Desktop profile 当前仍是 `link:` 指向本仓库**：DSH 运行时会锁住 `node_modules/dsh-live-terminal`，pnpm 无法在运行中把它替换为 npm 包（`EPERM rename`）。要让 Desktop 改用 npm 安装的 1.2.0：**完全退出 DeepSeek Harness**，在仓库根目录运行 `tools/switch-desktop-to-npm.ps1`（脚本会拒绝在 DSH 运行时执行），再重新打开 DSH；`-RestoreLink` 可切回本地链接。
+- ⏳ **Desktop profile 当前仍是 `link:` 指向本仓库**（`node_modules/dsh-live-terminal` 是 junction）：运行中的 DSH 会锁住它；另外 pnpm 用 rename 覆盖已存在的 junction 本身也会 `EPERM`。要让 Desktop 改用 npm 安装的 1.2.0：**完全退出 DeepSeek Harness**，在仓库根目录运行 `tools/switch-desktop-to-npm.ps1`（脚本会先安全 `rmdir` junction——只删 reparse point，不动仓库目录——再安装 npm 包，失败会自动恢复本地 link），再重新打开 DSH；`-RestoreLink` 可切回本地链接。
 - ✅ README 里引用的截图 raw URL 已验证可访问（200）；仓库无密钥/恢复码等敏感文件
 - ✅ **catalog PR 已准备好**：fork `Lancang-hzau/awesome-dsh-plugin` 已有分支 `add-dsh-live-terminal`（含 `data/plugins/Lancang-hzau__dsh-live-terminal.yml`）
 - ⏳ **catalog 仓库年龄门槛**：插件仓库创建于 `2026-10-19T11:35:41Z`，最早可提 PR 时间 **2026-10-20 19:35（Asia/Shanghai）**；到点运行 `node tools/open-catalog-pr.mjs --create` 即可（脚本会自动检查门槛并开 PR）
