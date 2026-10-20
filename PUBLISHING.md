@@ -13,16 +13,17 @@
 
 ---
 
-## 0. 当前状态（2026-10-19 更新）
+## 0. 当前状态（2026-10-20 更新）
 
-- ✅ **`dsh-live-terminal@1.1.0` 已正式发布到 npmjs（latest）**：<https://www.npmjs.com/package/dsh-live-terminal>（2026-10-19 22:07 +08:00；`1.0.0` 为历史版本）
-- ✅ 发布产物已校验：npm tarball 18 files、shasum `cc4295cb9d4971c074c93daf21ef90c465f7c883`，包内 `lib/client.js` sha256 与本地构建一致；1.0.0 时曾用全新 DSH profile 从 npmjs 安装并启动验证通过
+- ✅ **`dsh-live-terminal@1.2.0` 已正式发布到 npmjs（latest）**：<https://www.npmjs.com/package/dsh-live-terminal>（2026-10-20；1.1.0、1.0.0 为历史版本）
+- ✅ 发布产物已校验：npm tarball 18 files、shasum `393f2407ea7bd6b287163ada329d89be5fbe1d21`，包内 `lib/client.js` sha256 `71E945EF…C92E33` 与本地构建一致；发布使用 `npm publish --ignore-scripts` 直接取预构建产物（避免发布时重建）
 - ✅ 单测 182/182（v1.2 本地，Node 22/24 双版本验证）、独立 e2e 44 PASS（v1.0 验收）、Desktop 实机验证通过；v1.1/v1.2 验证见 `docs/test-report.md` §12/§13
-- ✅ **`v1.1.0` 已推送 GitHub**：release commit `58dc780`（annotated tag `v1.1.0` → `58dc780`）已 push 到 `origin/main`；其后的 `18fdfba` 仅为 Node 22 测试兼容修复（不进入 npm 包，不影响已发布产物）
+- ✅ **`v1.2.0` 已推送 GitHub**：release commit `f20c836`（annotated tag `v1.2.0` → `f20c836`）已 push 到 `origin/main`；`v1.1.0` 历史 commit 为 `58dc780`
 - ✅ `screenshots.json`、`icon.svg`、`README.md`、CI workflow、catalog 条目样例已就绪
 - ✅ **GitHub 仓库已建好并推送**：<https://github.com/Lancang-hzau/dsh-live-terminal>（public；topics 已加 `dsh-plugin`/`dsh`/`deepseek-harness`/`cordis`/`terminal`/`pty`/`xterm`/`agent-tools`）
-- ✅ **GitHub Release `v1.1.0` 已创建**，附 npm tarball 资产：<https://github.com/Lancang-hzau/dsh-live-terminal/releases/tag/v1.1.0>（`v1.0.0` Release 见 <https://github.com/Lancang-hzau/dsh-live-terminal/releases/tag/v1.0.0>）
-- ✅ **CI 已绿**：run #7（commit `18fdfba`）三项全绿——`windows-latest` Node 22 + Node 24 全量（含 bundle freshness 门禁）、`ubuntu-latest` Node 24 平台无关子集；run #6 曾因 Node 22 test runner 的 unref-timer 行为失败，已由 `18fdfba` 修复
+- ✅ **GitHub Release `v1.2.0` 已创建**，附 npm tarball 资产：<https://github.com/Lancang-hzau/dsh-live-terminal/releases/tag/v1.2.0>（历史版本见 <https://github.com/Lancang-hzau/dsh-live-terminal/releases>）
+- ✅ **CI 门禁**：`windows-latest` Node 22/24 全量（含 bundle freshness `git diff --exit-code -- lib/client.js`）+ `ubuntu-latest` Node 24 平台无关子集；v1.2.0 提交 `f20c836` 触发的 run 见 <https://github.com/Lancang-hzau/dsh-live-terminal/actions>
+- ⏳ **Desktop profile 当前仍是 `link:` 指向本仓库**：DSH 运行时会锁住 `node_modules/dsh-live-terminal`，pnpm 无法在运行中把它替换为 npm 包（`EPERM rename`）。要让 Desktop 改用 npm 安装的 1.2.0：**完全退出 DeepSeek Harness**，在仓库根目录运行 `tools/switch-desktop-to-npm.ps1`（脚本会拒绝在 DSH 运行时执行），再重新打开 DSH；`-RestoreLink` 可切回本地链接。
 - ✅ README 里引用的截图 raw URL 已验证可访问（200）；仓库无密钥/恢复码等敏感文件
 - ✅ **catalog PR 已准备好**：fork `Lancang-hzau/awesome-dsh-plugin` 已有分支 `add-dsh-live-terminal`（含 `data/plugins/Lancang-hzau__dsh-live-terminal.yml`）
 - ⏳ **catalog 仓库年龄门槛**：插件仓库创建于 `2026-10-19T11:35:41Z`，最早可提 PR 时间 **2026-10-20 19:35（Asia/Shanghai）**；到点运行 `node tools/open-catalog-pr.mjs --create` 即可（脚本会自动检查门槛并开 PR）

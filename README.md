@@ -39,6 +39,14 @@ dsh plugin --profile web add dsh-live-terminal
 
 **插件市场**：在 [awesome-dsh-plugin](https://awesome-dsh-plugin.com/) / dsh-market 中搜索 **Live Terminal** 或 `dsh-live-terminal`。
 
+**从本地 `link:` 开发切回 npm 安装**（可选）：完全退出 DeepSeek Harness 后，在仓库根目录运行
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\switch-desktop-to-npm.ps1
+```
+
+脚本会先检测 DSH 是否仍在运行（运行中会被文件锁挡住并直接退出），然后把 Desktop profile 的依赖换成 npm 上的版本并校验安装结果；加 `-RestoreLink` 可切回本地链接。
+
 ## 使用
 
 1. 正常和 DSH 对话，让它执行命令（例如“运行 npm test”）。命令会自动出现在右侧栏的**终端面板**中，实时输出。

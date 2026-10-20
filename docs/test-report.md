@@ -324,6 +324,10 @@ node tools/qa-e2e.mjs --slow --host-log=qa/artifacts/devhost-3105-final2.log "<t
 | mock e2e | **24 PASS / 0 FAIL / 1 SKIP** |
 | host 行为集成探针 | **6/6 PASS**：快速命令不产生 tab/sessions 事件；慢命令上屏后按配置自动关闭；失败命令 notice 含 exitCode/excerpt；隐藏失败仅 notice；tool 终端默认关闭且 `keepOpen` 保留；`autoCloseToolTerminals=false` 生效 |
 | client toast 探针 | 真实 dev host 页面 + 注入假 EventSource：失败 notice 渲染为「命令失败（退出码 7），终端已自动关闭：echo boom — boom: command failed」，截图本机验证通过 |
+| 真实 Desktop 行为检查 | 成功命令自动关闭（5s 后列表清空）、失败命令 2s 自动关闭、`keepOpen` 会话跨 7s+ 仍保留、`live_terminal_run` 结果显示自动关闭提示；实测被接管 PowerShell 启动开销约 **3.3–3.9s**，据此把默认 `interceptMinVisibleMs` 从 1000 调到 **4500ms**（含启动开销，快速命令默认完全不上屏），并补默认阈值单测 |
+| npm 发布 | `dsh-live-terminal@1.2.0` 已发布（latest）：18 files、tarball 148,585 B、shasum `393f2407ea7bd6b287163ada329d89be5fbe1d21`；从 registry 下载的包内 `lib/client.js` sha256 与本地构建一致 |
+| GitHub Release | `v1.2.0` Release 已创建并上传 npm tarball 资产（tag `v1.2.0` → `f20c836`） |
+| Desktop 切换 npm 安装 | 运行中的 DSH 会锁住 profile 的 `node_modules/dsh-live-terminal`，pnpm 替换 `link:` 时报 `EPERM rename`；已提供 `tools/switch-desktop-to-npm.ps1`（检测 DSH 运行中会拒绝执行），需完全退出 DSH 后运行脚本，再重新打开 |
 | 独立验证 | host 行为 **41/41** + notice 模式 **3/3** PASS；client `parseTerminalNotice` **5/5**；发现并修复「先建会话后连 SSE 的 `sessions` 事件抑制」P2 边界（含回归测试） |
 
-- 结论：自动清理功能达到可试用门槛；npm/GitHub 发布待维护者确认后执行（版本 1.2.0 已提交到仓库）。
+- 结论：v1.2.0 已发布（npm + GitHub Release）；自动清理行为在真实 Desktop 中验证通过；Desktop profile 由 `link:` 切到 npm 安装需要在 DSH 完全退出后执行 `tools/switch-desktop-to-npm.ps1`。
