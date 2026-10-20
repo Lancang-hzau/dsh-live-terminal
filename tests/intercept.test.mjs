@@ -109,6 +109,7 @@ test('intercepts a foreground pwsh call and returns a built-in-shaped value', as
   assert.equal(registry.calls.created[0].agentId, 'agent-1')
   assert.equal(registry.calls.created[0].sessionId, 'session-1')
   assert.equal(registry.calls.created[0].shellKindHint, 'pwsh')
+  assert.equal(registry.calls.created[0].origin, 'intercept')
   assert.equal(registry.calls.waited.length, 1)
 })
 

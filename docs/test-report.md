@@ -295,7 +295,7 @@ node tools/qa-e2e.mjs --slow --host-log=qa/artifacts/devhost-3105-final2.log "<t
 
 | 项 | v1.1 结果 |
 |---|---|
-| host 单元测试 | **166/166 PASS**（`npm test`，`tests/*.test.mjs`；133 v1.1 + apply 7 + routes 17 + tools 1 + 收尾 8），Node 24 与 Node 22.23.3 双版本验证 |
+| host 单元测试 | **182/182 PASS**（`npm test`，`tests/*.test.mjs`；166 v1.1 收尾基线 + 自动清理 14），Node 24 与 Node 22.23.3 双版本验证 |
 | CI 门禁 | GitHub Actions run #7（commit `18fdfba`）**三项全绿**：`windows-latest` Node 22/24 全量（`npm run build` → bundle freshness `git diff --exit-code -- lib/client.js` → `npm test` → `npm run typecheck`）；`ubuntu-latest` Node 24 平台无关子集（排除 `tests/registry.test.mjs`，其断言 Windows 路径语义）。run #6 曾因 Node 22 test runner 把仅剩 unref 定时器的空循环判定为 drained 而失败，已由 `18fdfba` 测试侧修复（产物未变） |
 | TypeScript | `npm run typecheck` **0 error** |
 | 官方构建产物 | `lib/client.js` **396,630 B / gzip 101.5 KiB**（发布产物；版本号构建期注入，bundle 内 `version:"1.1.0"`，构建确定性 sha 稳定 `4B10F7F9…D844A5`） |
@@ -308,3 +308,22 @@ node tools/qa-e2e.mjs --slow --host-log=qa/artifacts/devhost-3105-final2.log "<t
 | 独立验证 | 四轮：v1.1 两轮（发现并修复“启动窗口期默认交互终端被容量回收”边界，复验 PASS×3）；P0+版本/文档轮（文档 4 处不一致已修正并复核 4/4）；收尾批次轮（host P2 + 打包/CI） |
 
 - 结论：v1.1 达到发布门槛（host 单测 / typecheck / 构建 / e2e / 浏览器探针全绿）；剩余 O-3、O-4 为非阻断观察项，不影响发布。
+
+---
+
+## 13. v1.2 终端自动清理验证（2026-10-20）
+
+> v1.2 新增「快速命令不上屏 + 一次性命令结束后自动关闭 + `keepOpen` + 失败通知」；与 §12 冲突时以本节为准。
+
+| 项 | v1.2 结果 |
+|---|---|
+| host 单元测试 | **182/182 PASS**（166 基线 + 自动清理 16：registry +14、tools +2，含「先建会话后连 SSE」回归 1 与默认阈值用例 1；另 intercept 断言补强）；Node 22.23.3 与 Node 24.13.0 双版本 |
+| TypeScript | `npm run typecheck` **0 error** |
+| 构建产物 | `lib/client.js` **398,049 B / gzip 104,383 B / sha256 `71E945EF…C92E33`**，`version:"1.2.0"`，构建幂等 |
+| 真实 dev host e2e | **21 PASS / 0 FAIL / 1 SKIP**（client 报 `version:"1.2.0"`） |
+| mock e2e | **24 PASS / 0 FAIL / 1 SKIP** |
+| host 行为集成探针 | **6/6 PASS**：快速命令不产生 tab/sessions 事件；慢命令上屏后按配置自动关闭；失败命令 notice 含 exitCode/excerpt；隐藏失败仅 notice；tool 终端默认关闭且 `keepOpen` 保留；`autoCloseToolTerminals=false` 生效 |
+| client toast 探针 | 真实 dev host 页面 + 注入假 EventSource：失败 notice 渲染为「命令失败（退出码 7），终端已自动关闭：echo boom — boom: command failed」，截图本机验证通过 |
+| 独立验证 | host 行为 **41/41** + notice 模式 **3/3** PASS；client `parseTerminalNotice` **5/5**；发现并修复「先建会话后连 SSE 的 `sessions` 事件抑制」P2 边界（含回归测试） |
+
+- 结论：自动清理功能达到可试用门槛；npm/GitHub 发布待维护者确认后执行（版本 1.2.0 已提交到仓库）。

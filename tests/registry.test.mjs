@@ -103,6 +103,31 @@ async function waitFor(predicate, timeoutMs = 2000) {
   }
 }
 
+/**
+ * Ref'd sleep: keeps the event loop alive so unref'd registry timers still fire
+ * (Node 22's test runner would otherwise treat the loop as drained).
+ * @param {number} ms milliseconds.
+ * @returns {Promise<void>} resolves after the delay.
+ */
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * Capture the registry's global events.
+ * @param {TerminalRegistry} registry registry under test.
+ * @param {(name: string, data: any) => void} [onEvent] optional per-event hook.
+ * @returns {{ events: { name: string, data: any }[], unsubscribe: () => void }} captured events.
+ */
+function captureEvents(registry, onEvent) {
+  const events = []
+  const unsubscribe = registry.subscribeEvents((name, data) => {
+    events.push({ name, data })
+    onEvent?.(name, data)
+  })
+  return { events, unsubscribe }
+}
+
 test('normalizeDimensions clamps invalid values to defaults', () => {
   assert.deepEqual(normalizeDimensions(100, 40), { cols: 100, rows: 40 })
   assert.deepEqual(normalizeDimensions(undefined, undefined), { cols: 120, rows: 30 })
@@ -126,6 +151,11 @@ test('resolveConfig clamps numeric bounds and parses flags', () => {
     maxSessions: 999,
     commandTimeoutMs: -1,
     retainExited: 999,
+    interceptMinVisibleMs: -5,
+    autoCloseCommandDelayMs: -5,
+    autoCloseFailedDelayMs: 9_000_000,
+    autoCloseToolTerminals: false,
+    autoCloseNotice: 'all',
   })
   assert.equal(config.interceptShellTools, false)
   assert.equal(config.shellPath, 'C:\\pwsh.exe')
@@ -134,6 +164,21 @@ test('resolveConfig clamps numeric bounds and parses flags', () => {
   assert.equal(config.maxSessions, 128)
   assert.equal(config.commandTimeoutMs, 1000)
   assert.equal(config.retainExited, 128)
+  assert.equal(config.interceptMinVisibleMs, 0)
+  assert.equal(config.autoCloseCommandDelayMs, -1)
+  assert.equal(config.autoCloseFailedDelayMs, 600_000)
+  assert.equal(config.autoCloseToolTerminals, false)
+  assert.equal(config.autoCloseNotice, 'all')
+})
+
+test('resolveConfig defaults and validates the auto-close notice mode', () => {
+  assert.equal(resolveConfig(undefined).interceptMinVisibleMs, 4500)
+  assert.equal(resolveConfig(undefined).autoCloseCommandDelayMs, 5000)
+  assert.equal(resolveConfig(undefined).autoCloseFailedDelayMs, 2000)
+  assert.equal(resolveConfig(undefined).autoCloseToolTerminals, true)
+  assert.equal(resolveConfig(undefined).autoCloseNotice, 'failed')
+  assert.equal(resolveConfig({ autoCloseNotice: 'none' }).autoCloseNotice, 'none')
+  assert.equal(resolveConfig({ autoCloseNotice: 'weird' }).autoCloseNotice, 'failed')
 })
 
 /**
@@ -584,3 +629,277 @@ test('capacity pressure during agent-terminal startup keeps the starting default
   }
 })
 
+test('a fast intercepted command stays off-screen and produces no events', async () => {
+  const subprocess = fakeProcessSubprocess()
+  const registry = processRegistry(subprocess, { interceptMinVisibleMs: 10_000 })
+  const agent = { id: 'agent-1', session: { id: 'session-1' } }
+  const { events, unsubscribe } = captureEvents(registry)
+  try {
+    const session = await registry.createCommandSession({ command: 'Write-Output hi', origin: 'intercept', agent, agentId: 'agent-1' })
+    assert.equal(registry.lookup(session.id)?.id, session.id, 'hidden session is still tracked internally')
+    assert.equal(registry.size, 1)
+    assert.deepEqual(registry.list(), [], 'hidden session must not be listed')
+    assert.equal(registry.resolveRecentForAgent(agent), undefined, 'hidden session is not a tool target')
+    assert.deepEqual(events, [], 'hidden command must not emit a sessions event')
+
+    subprocess.spawned[0].handle.push('hi\r\n')
+    subprocess.spawned[0].handle.finish({ exitCode: 0, signal: null })
+    await waitFor(() => registry.lookup(session.id) === undefined)
+    assert.equal(registry.size, 0)
+    assert.deepEqual(events, [], 'a fast hidden command leaves no tab and no events behind')
+  } finally {
+    unsubscribe()
+    await registry.dispose()
+  }
+})
+
+test('an intercepted command that runs past interceptMinVisibleMs appears as a tab', async () => {
+  const subprocess = fakeProcessSubprocess()
+  const registry = processRegistry(subprocess, { interceptMinVisibleMs: 25, autoCloseCommandDelayMs: 20 })
+  const agent = { id: 'agent-1', session: { id: 'session-1' } }
+  const { events, unsubscribe } = captureEvents(registry)
+  try {
+    const session = await registry.createCommandSession({ command: 'Start-Sleep 1', origin: 'intercept', agent, agentId: 'agent-1' })
+    assert.deepEqual(registry.list(), [])
+    await waitFor(() => registry.list().some((info) => info.id === session.id))
+    assert.equal(registry.resolveRecentForAgent(agent)?.id, session.id)
+    assert.ok(
+      events.some((event) => event.name === 'sessions' && event.data.sessions.some((info) => info.id === session.id)),
+      'revealing the session must emit a sessions event',
+    )
+
+    subprocess.spawned[0].handle.finish({ exitCode: 0, signal: null })
+    await waitFor(() => registry.lookup(session.id) === undefined)
+  } finally {
+    unsubscribe()
+    await registry.dispose()
+  }
+})
+
+test('a hidden fast failure emits a notice but never a tab', async () => {
+  const subprocess = fakeProcessSubprocess()
+  const registry = processRegistry(subprocess, { interceptMinVisibleMs: 10_000 })
+  const agent = { id: 'agent-1', session: { id: 'session-1' } }
+  const { events, unsubscribe } = captureEvents(registry)
+  try {
+    const session = await registry.createCommandSession({ command: 'fail', origin: 'intercept', agent, agentId: 'agent-1' })
+    subprocess.spawned[0].handle.push('partial line\r\nboom failure\r\n')
+    subprocess.spawned[0].handle.finish({ exitCode: 2, signal: null })
+    await waitFor(() => events.some((event) => event.name === 'notice'))
+    await waitFor(() => registry.lookup(session.id) === undefined)
+    assert.equal(events.filter((event) => event.name === 'sessions').length, 0, 'no tab may appear')
+    const notice = events.find((event) => event.name === 'notice').data
+    assert.deepEqual(notice, {
+      type: 'auto-close',
+      reason: 'failed',
+      terminalId: session.id,
+      title: session.title,
+      exitCode: 2,
+      signal: null,
+      excerpt: 'boom failure',
+    })
+  } finally {
+    unsubscribe()
+    await registry.dispose()
+  }
+})
+
+test('a successful command terminal auto-closes after autoCloseCommandDelayMs without a notice', async () => {
+  const subprocess = fakeProcessSubprocess()
+  const registry = processRegistry(subprocess, { autoCloseCommandDelayMs: 25, autoCloseFailedDelayMs: 25 })
+  const { events, unsubscribe } = captureEvents(registry)
+  try {
+    const session = await registry.createCommandSession({ command: 'Write-Output ok', origin: 'tool' })
+    assert.ok(registry.list().some((info) => info.id === session.id), 'tool command terminal is visible immediately')
+    subprocess.spawned[0].handle.finish({ exitCode: 0, signal: null })
+    await waitFor(() => session.state === 'exited')
+    await waitFor(() => registry.lookup(session.id) === undefined)
+    assert.equal(events.filter((event) => event.name === 'notice').length, 0)
+  } finally {
+    unsubscribe()
+    await registry.dispose()
+  }
+})
+
+test('a failed command terminal emits a notice before auto-closing', async () => {
+  const subprocess = fakeProcessSubprocess()
+  const registry = processRegistry(subprocess, { autoCloseFailedDelayMs: 25, autoCloseNotice: 'failed' })
+  let presentWhenNotified
+  const { events, unsubscribe } = captureEvents(registry, (name, data) => {
+    if (name === 'notice') presentWhenNotified = registry.lookup(data.terminalId) !== undefined
+  })
+  try {
+    const session = await registry.createCommandSession({ command: 'fail', origin: 'tool' })
+    subprocess.spawned[0].handle.push('broken output\r\ncommand failed: nope\r\n')
+    subprocess.spawned[0].handle.finish({ exitCode: 3, signal: null })
+    await waitFor(() => events.some((event) => event.name === 'notice'))
+    assert.equal(presentWhenNotified, true, 'notice is emitted before the terminal closes')
+    const notice = events.find((event) => event.name === 'notice').data
+    assert.equal(notice.reason, 'failed')
+    assert.equal(notice.exitCode, 3)
+    assert.equal(notice.signal, null)
+    assert.equal(notice.excerpt, 'command failed: nope')
+    await waitFor(() => registry.lookup(session.id) === undefined)
+  } finally {
+    unsubscribe()
+    await registry.dispose()
+  }
+})
+
+test('keepOpen keeps the command terminal alive after exit', async () => {
+  const subprocess = fakeProcessSubprocess()
+  const registry = processRegistry(subprocess, { autoCloseCommandDelayMs: 20, autoCloseFailedDelayMs: 20 })
+  const { events, unsubscribe } = captureEvents(registry)
+  try {
+    const session = await registry.createCommandSession({ command: 'persist', origin: 'tool', keepOpen: true })
+    subprocess.spawned[0].handle.finish({ exitCode: 0, signal: null })
+    await waitFor(() => session.state === 'exited')
+    await sleep(60)
+    assert.equal(registry.lookup(session.id)?.id, session.id)
+    assert.equal(events.filter((event) => event.name === 'notice').length, 0)
+  } finally {
+    unsubscribe()
+    await registry.dispose()
+  }
+})
+
+test('autoCloseToolTerminals=false only auto-closes intercepted commands', async () => {
+  const subprocess = fakeProcessSubprocess()
+  const registry = processRegistry(subprocess, {
+    interceptMinVisibleMs: 0,
+    autoCloseToolTerminals: false,
+    autoCloseCommandDelayMs: 20,
+    autoCloseFailedDelayMs: 20,
+  })
+  try {
+    const toolSession = await registry.createCommandSession({ command: 'tool', origin: 'tool' })
+    subprocess.spawned[0].handle.finish({ exitCode: 0, signal: null })
+    await waitFor(() => toolSession.state === 'exited')
+    await sleep(60)
+    assert.equal(registry.lookup(toolSession.id)?.id, toolSession.id, 'tool terminal stays when autoCloseToolTerminals=false')
+
+    const interceptSession = await registry.createCommandSession({ command: 'intercept', origin: 'intercept' })
+    subprocess.spawned[1].handle.finish({ exitCode: 0, signal: null })
+    await waitFor(() => registry.lookup(interceptSession.id) === undefined)
+  } finally {
+    await registry.dispose()
+  }
+})
+
+test('interactive terminals are never auto-closed', async () => {
+  const subprocess = fakeProcessSubprocess()
+  const registry = processRegistry(subprocess, { autoCloseCommandDelayMs: 20, autoCloseFailedDelayMs: 20 })
+  try {
+    const interactive = await registry.createInteractive({ cwd: 'C:\\work', owner: 'user' })
+    subprocess.spawned[0].handle.finish({ exitCode: 0, signal: null })
+    await waitFor(() => interactive.state === 'exited')
+    await sleep(60)
+    assert.equal(registry.lookup(interactive.id)?.id, interactive.id)
+  } finally {
+    await registry.dispose()
+  }
+})
+
+test('a manual close cancels the pending auto-close notice', async () => {
+  const subprocess = fakeProcessSubprocess()
+  const registry = processRegistry(subprocess, { autoCloseFailedDelayMs: 40, autoCloseNotice: 'all' })
+  const { events, unsubscribe } = captureEvents(registry)
+  try {
+    const session = await registry.createCommandSession({ command: 'fail', origin: 'tool' })
+    subprocess.spawned[0].handle.finish({ exitCode: 1, signal: null })
+    await waitFor(() => session.state !== 'running')
+    await registry.close(session.id)
+    await sleep(80)
+    assert.equal(events.filter((event) => event.name === 'notice').length, 0, 'a manual close must not emit an auto-close notice')
+  } finally {
+    unsubscribe()
+    await registry.dispose()
+  }
+})
+
+test('closing a hidden command cancels its reveal timer', async () => {
+  const subprocess = fakeProcessSubprocess()
+  const registry = processRegistry(subprocess, { interceptMinVisibleMs: 30 })
+  const { events, unsubscribe } = captureEvents(registry)
+  try {
+    const session = await registry.createCommandSession({ command: 'hidden', origin: 'intercept', agentId: 'agent-1' })
+    await registry.close(session.id)
+    await sleep(80)
+    assert.deepEqual(registry.list(), [])
+    assert.deepEqual(events, [])
+    assert.equal(registry.lookup(session.id), undefined)
+  } finally {
+    unsubscribe()
+    await registry.dispose()
+  }
+})
+
+test('dispose clears pending visibility and auto-close timers', async () => {
+  const subprocess = fakeProcessSubprocess()
+  const registry = processRegistry(subprocess, {
+    interceptMinVisibleMs: 5000,
+    autoCloseCommandDelayMs: 10,
+    autoCloseNotice: 'all',
+  })
+  const { events, unsubscribe } = captureEvents(registry)
+  try {
+    const hidden = await registry.createCommandSession({ command: 'hidden', origin: 'intercept', agentId: 'agent-1' })
+    const visible = await registry.createCommandSession({ command: 'visible', origin: 'tool' })
+    subprocess.spawned[1].handle.finish({ exitCode: 0, signal: null })
+    await waitFor(() => visible.state === 'exited')
+    await registry.dispose()
+    await sleep(40)
+    assert.equal(registry.size, 0)
+    assert.equal(registry.lookup(hidden.id), undefined)
+    assert.equal(events.filter((event) => event.name === 'notice').length, 0, 'timers must not fire after dispose')
+  } finally {
+    unsubscribe()
+  }
+})
+
+
+test('a session created before the first SSE subscriber still reports its close', async () => {
+  const subprocess = fakeProcessSubprocess()
+  const registry = processRegistry(subprocess, {
+    interceptMinVisibleMs: 0,
+    autoCloseCommandDelayMs: -1,
+    autoCloseFailedDelayMs: -1,
+  })
+  try {
+    // Created while no global SSE subscriber exists (for example, the panel is
+    // not connected yet); the signature tracked without subscribers must not
+    // hide the later removal from a client that subscribes in between.
+    const session = await registry.createCommandSession({ command: 'pre-subscribe', origin: 'tool' })
+    const { events, unsubscribe } = captureEvents(registry)
+    try {
+      assert.equal(await registry.close(session.id), true)
+      const removal = events.find(
+        (event) => event.name === 'sessions' && Array.isArray(event.data.sessions) && event.data.sessions.length === 0,
+      )
+      assert.ok(removal, 'closing a session created before the subscriber must emit the updated sessions list')
+    } finally {
+      unsubscribe()
+    }
+  } finally {
+    await registry.dispose()
+  }
+})
+
+test('the default visibility threshold keeps typical fast commands off-screen', async () => {
+  const subprocess = fakeProcessSubprocess()
+  // Default config: interceptMinVisibleMs is 4500ms (includes the Windows
+  // PowerShell/ConPTY startup overhead), so a command that settles immediately
+  // must never become visible.
+  const registry = processRegistry(subprocess)
+  const { events, unsubscribe } = captureEvents(registry)
+  try {
+    const session = await registry.createCommandSession({ command: 'fast-default', origin: 'intercept' })
+    subprocess.spawned[0].handle.finish({ exitCode: 0, signal: null })
+    await waitFor(() => registry.size === 0)
+    assert.equal(registry.lookup(session.id), undefined)
+    assert.equal(events.some((event) => event.name === 'sessions'), false, 'fast default command must not emit sessions')
+  } finally {
+    unsubscribe()
+  }
+  await registry.dispose()
+})

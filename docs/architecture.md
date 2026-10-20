@@ -97,6 +97,11 @@ export function apply(ctx) {
   - `maxSessions`（默认 16）
   - `commandTimeoutMs`（默认 180000）：`live_terminal_run(wait:true)` 的默认等待超时；被拦截的 pwsh 前台调用固定 120s 上限（`INTERCEPT_DEFAULT_TIMEOUT_MS`，不读此配置）
   - `retainExited`（默认 10）：保留多少个已退出的命令会话用于回看
+  - `interceptMinVisibleMs`（默认 4500，0..60000）：被接管命令至少运行这么久才上屏；0 = 全部上屏（旧行为）。按 wall-clock 计，包含 shell 进程启动开销（Windows PowerShell/ConPTY 实测约 3–4s），因此默认值保证普通秒级命令完全不上屏。
+  - `autoCloseCommandDelayMs`（默认 5000，-1..600000）：成功结束的一次性命令终端自动关闭延迟；-1 = 永不自动关闭；0 = 下一 tick
+  - `autoCloseFailedDelayMs`（默认 2000，-1..600000）：失败/超时/中止的一次性命令终端自动关闭延迟；-1 = 永不自动关闭
+  - `autoCloseToolTerminals`（默认 true）：false = 只自动关闭被接管的命令，`live_terminal_run` 创建的终端保留
+  - `autoCloseNotice`（默认 `'failed'`）：`failed` | `all` | `none`，自动关闭时是否通过全局 SSE 发 `notice` 事件
 
 ### 4.2 PTY 会话（`session.js`）
 
@@ -130,11 +135,17 @@ const handle = await subprocess.spawnTerminal({
   - `visibleText()`：`buffer.active` 从 `baseY`（viewport 顶部）起 `rows` 行 `translateToString(true)`，逐行右裁剪，去掉尾部全空行，行间 `\n`（滚动后仍是“可见屏”语义；alt buffer 时等价 0..rows-1）。
 - 标题：`kind: 'command'|'interactive'`；命令会话标题 = 截断后的命令首行（≤80 字符）；交互会话默认 `PowerShell` / `终端`。
 - 会话保留：命令会话退出后保留（最多 `retainExited` 个，超出关闭并移除）；交互会话不自动移除。
+- 会话 origin 与隐藏上屏（v1.2）：命令会话带 `origin: 'intercept' | 'tool'`。被接管的命令（`intercept`）在 spawn 后先被 `#hidden` 隐藏，直到运行超过 `interceptMinVisibleMs` 才 reveal 并发 `sessions` 事件；在阈值内退出的命令**不产生 tab、不触发自动弹出、不发 `sessions` 事件**（隐藏会话被 `list()` / `resolveRecentForAgent()` 过滤），失败时补发一条 `notice`。
+- 自动关闭与 notice（v1.2）：命令会话退出后按 origin/keepOpen/配置安排自动关闭定时器（`unref`，0 = 下一 tick，-1 = 不关）；定时器到点先按 `autoCloseNotice` 广播 `notice` 再 `close()`。用户终端、交互式终端、agent 默认交互终端永不自动关闭；手动 `close()` 会取消定时器且不发 notice。
 
 ### 4.3 会话注册表（`registry.js`）
 
-- `createCommandSession({ command, cwd, cols, rows, timeoutMs, sessionId, agentId })`：spawn `shell -NoLogo -NoProfile -NonInteractive -Command <command>`（命令字符串原样传入 argv，不经 shell 解释）。已与实现确认：命令会话不加载用户 profile（对齐内置执行器、避免 6s 启动与输出污染）。`live_terminal_run` 每次调用都创建一个这样的独立可见命令会话（不再复用交互 shell，也不再使用 wrapper 标记）。
-- `createInteractive({ cwd, cols, rows, sessionId, agentId, title })`：spawn 交互 shell（`-NoLogo`，加载用户 profile）；`live_terminal_open` / `live_terminal_send` 的缺省目标用它。
+- `createCommandSession({ command, cwd, cols, rows, timeoutMs, sessionId, agentId, origin, keepOpen })`：spawn `shell -NoLogo -NoProfile -NonInteractive -Command <command>`（命令字符串原样传入 argv，不经 shell 解释）。已与实现确认：命令会话不加载用户 profile（对齐内置执行器、避免 6s 启动与输出污染）。`live_terminal_run` 每次调用都创建一个这样的独立可见命令会话（不再复用交互 shell，也不再使用 wrapper 标记）。
+  - `origin`（默认 `'tool'`）：`'intercept'` 表示内置 pwsh/bash 接管（参与快速命令隐藏 + 自动关闭）；`'tool'` 表示 `live_terminal_run`（自动关闭受 `autoCloseToolTerminals` 控制）。
+  - `keepOpen`（默认 false）：为 true 时命令结束后不自动关闭该终端。
+  - 自动关闭：命令退出后成功延迟 `autoCloseCommandDelayMs`、失败/超时/中止延迟 `autoCloseFailedDelayMs` 关闭；到点按 `autoCloseNotice` 先广播 `notice` 再 close。手动 `close()` 取消定时器且不广播 notice。
+  - notice 契约（全局 SSE `/events` 原样转发）：`{ type: 'auto-close', reason: 'failed' | 'succeeded', terminalId, title, exitCode, signal, excerpt }`；`excerpt` = 输出尾部最后一个非空行（去 ANSI、≤160 字符）。
+- `createInteractive({ cwd, cols, rows, sessionId, agentId, title })`：spawn 交互 shell（`-NoLogo`，加载用户 profile）；`live_terminal_open` / `live_terminal_send` 的缺省目标用它。交互式/用户/agent 默认终端永不参与自动关闭。
 - `ensureAgentTerminal(agent)`：每个 agent 一个默认交互终端（用于 `live_terminal_send/read`，也可被 `live_terminal_screenshot` 的兜底选择使用）。
 - `runInExisting(session, command, ...)`（wrapper 标记法）：保留为内部工具/单测能力；`live_terminal_run` 不再使用它（避免 wrapper 回显/标记污染可见屏幕与截图）。
   - 产生随机 nonce；wrapper 采用 `dsh-tool-pwsh-persistent` 的写法：
@@ -155,7 +166,7 @@ const handle = await subprocess.spawnTerminal({
 | GET | `/sessions` | — | `{ sessions: SessionInfo[] }`（含已退出保留会话） |
 | GET | `/snapshot?id=` | — | `{ info, screen /*ANSI*/, text /*可见屏文本*/, cursor }` |
 | GET | `/events?id=` | — | SSE：`snapshot` / `output` / `state` / `exit` 事件；20s 心跳注释 |
-| GET | `/events` | — | SSE：全局 `sessions` 事件（会话新增/状态变化时） |
+| GET | `/events` | — | SSE：全局 `sessions` 事件（会话新增/状态变化时）+ `notice` 事件（v1.2 自动关闭通知，见 §4.3 notice 契约；隐藏会话不产生 `sessions` 事件） |
 | POST | `/create` | `{ cols?, rows?, title?, sessionId? }` | `{ session }` |
 | POST | `/input` | `{ id, data }` | `{ ok: true }`（data 为原始 UTF-8，含控制字符；大写上限 64KB） |
 | POST | `/resize` | `{ id, cols, rows }` | `{ ok: true }` |
@@ -199,8 +210,8 @@ type SessionInfo = {
 工具清单（**统一加 `live_` 前缀**，避免与官方实验性“持久终端”bundle 的 `terminal_*` 工具重名导致注册失败）：
 
 1. `live_terminal_run`
-   - 参数：`command`（string，必填）、`description`（string，可写可不写，仅展示）、`wait`（boolean，默认 true）、`timeoutMs`（number，默认 `commandTimeoutMs`）
-   - 行为：**每次调用创建一个独立的可见命令会话**（`createCommandSession`，`-NoProfile -NonInteractive -Command`，cwd=agent 当前工作目录），输出实时进面板；`wait:true` 等待退出（受 timeoutMs 约束）；`wait:false` 立即返回、命令继续跑（后续用 `live_terminal_read`/`live_terminal_screenshot` 查看）。
+   - 参数：`command`（string，必填）、`description`（string，可写可不写，仅展示）、`wait`（boolean，默认 true）、`timeoutMs`（number，默认 `commandTimeoutMs`）、`keepOpen`（boolean，默认 false = 命令结束后自动关闭该终端；true = 保留）
+   - 行为：**每次调用创建一个独立的可见命令会话**（`createCommandSession`，`-NoProfile -NonInteractive -Command`，cwd=agent 当前工作目录），输出实时进面板；`wait:true` 等待退出（受 timeoutMs 约束）；`wait:false` 立即返回、命令继续跑（后续用 `live_terminal_read`/`live_terminal_screenshot` 查看）。命令结束后终端按 `autoCloseToolTerminals`/`autoCloseCommandDelayMs`/`autoCloseFailedDelayMs` 自动关闭（默认成功 5s、失败 2s），`keepOpen:true` 可保留。
    - value：`{ terminalId, title, output, exitCode: number|null, timedOut: boolean, aborted: boolean, stillRunning: boolean }`
    - render：**首行必须输出 `[terminal <id>]`（模型靠它传 terminalId）**，其后为 `output`，非 0 时追加 `\n[exit code: N]`，等待/超时等状态标记；输出有界。
 2. `live_terminal_screenshot`
@@ -343,9 +354,9 @@ export function apply(ctx) {
 - 每次改动 client 需 `node tools/build-client.mjs` 后重启 dev host。
 - 文本文件一律用 `write`/`edit` 工具写 UTF-8（不要用 PowerShell `Set-Content` 改中文文本）。
 
-## 8. v1.1 修订记录
+## 8. 修订记录（v1.1 / v1.2）
 
-| 领域 | v1.1 契约调整 |
+| 领域 | v1.1 / v1.2 契约调整 |
 |---|---|
 | 插件装配 | `apply()` 的 registry disposer 统一挂在插件 `ctx` 上：`subprocess`/`workingDirectory` 在 apply 时已就绪（direct 分支）不再因普通对象无 `.effect` 而抛 `TypeError`；deferred 分支保持 `ctx.inject` 行为。 |
 | shell 拦截 | 按工具方言选择 shell（`bash` 方言不再落到 pwsh）；方言解析/启动失败时回退 `next()`，保持原生工具语义。 |
@@ -355,5 +366,6 @@ export function apply(ctx) {
 | SSE 背压 | 每条 SSE 连接待发帧上限 4MiB；`res.write()` 返回 false 时暂停等待 `drain`；超限时断开该慢连接（EventSource 按 `retry: 1000` 重连并重新同步 snapshot），host 内存有界。 |
 | 工具 ownership | 工具只能看到/操作本 agent 自己的终端：`owner==='user'` 的终端对 agent 只读可见（list/read/screenshot 允许，send/close 拒绝）；`owner==='agent'` 仅当 `session.agentId === agent.id` 时可见且可写；其它 agent 的终端对 list/read/screenshot/send/close 全部拒绝并给出明确错误。 |
 | 快照与截图有界 | `/snapshot` 与 per-session SSE 首帧固定 `scrollback: 500`（`SSE_SNAPSHOT_SCROLLBACK`），单帧远低于 4MiB 队列上限；`live_terminal_screenshot(withScrollback)` 的 `text` 按 `maxOutputBytes` 保留 UTF-8 尾部并加截断说明，`ansi` 使用 `scrollback: 500` 而不是全量滚动缓冲。 |
+| 终端自动清理（v1.2） | 被接管命令短于 `interceptMinVisibleMs` 完全不上屏（无 tab/无自动弹出/无 `sessions` 事件）；一次性命令结束后自动关闭（成功 `autoCloseCommandDelayMs`、失败/超时/中止 `autoCloseFailedDelayMs`，`-1` 关闭该行为），`live_terminal_run` 受 `autoCloseToolTerminals` 控制、工具参数 `keepOpen:true` 可保留；用户/交互式/agent 默认终端永不自动关闭；自动关闭失败命令时全局 SSE 发 `notice`（`autoCloseNotice` 控制范围）。 |
 | client | 输入串行队列（单请求 ≤32KB 分片、失败上报）、HTTP 10s 超时、全局 sessions SSE 单例、主题/resize 去抖、tabs/overlay a11y 增强；client 版本号由构建期 `__PLUGIN_VERSION__` 注入。 |
-| 版本 | `1.1.0`。 |
+| 版本 | `1.2.0`。 |

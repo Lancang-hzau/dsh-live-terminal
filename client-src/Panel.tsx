@@ -23,7 +23,7 @@ import {
 } from './api'
 import { IconCamera, IconClose, IconPlus, IconReconnect, IconRefresh, IconTerminal, IconWarning } from './icons'
 import { TerminalView, type TerminalController } from './TerminalView'
-import { isFullSessionInfo, stripUndefined, type SessionInfo, type SessionInfoPatch } from './types'
+import { isFullSessionInfo, stripUndefined, type SessionInfo, type SessionInfoPatch, type TerminalNotice } from './types'
 
 export interface PanelProps {
   /** Locale-bound translator provided by the slot runtime. */
@@ -45,6 +45,13 @@ interface ListError {
 const DEFAULT_SIZE = { cols: 100, rows: 30 }
 const SESSION_POLL_MS = 5000
 const TOAST_MS = 1800
+/** Auto-close notices stay longer so the failure excerpt is readable. */
+const NOTICE_TOAST_MS = 4000
+
+interface ToastState {
+  text: string
+  duration: number
+}
 
 function fallbackTranslate(key: string): string {
   return key
@@ -153,7 +160,7 @@ export function Panel(props: PanelProps) {
   const [streamConnected, setStreamConnected] = useState(false)
   const [reconnectToken, setReconnectToken] = useState(0)
   const [termError, setTermError] = useState<string | null>(null)
-  const [toast, setToast] = useState<string | null>(null)
+  const [toast, setToast] = useState<ToastState | null>(null)
   const [streamEnabled, setStreamEnabled] = useState(false)
 
   const selectedIdRef = useRef<string | null>(null)
@@ -178,6 +185,11 @@ export function Panel(props: PanelProps) {
   const tabPanelId = useId()
   const tabRefs = useRef(new Map<string, HTMLDivElement>())
   const tabIdFor = (id: string): string => `${tabPanelId}-tab-${id}`
+
+  /** Show a toast; `duration` lets auto-close notices stay up longer. */
+  const showToast = useCallback((text: string, duration: number = TOAST_MS): void => {
+    setToast({ text, duration })
+  }, [])
 
   /* ---------------------------------------------------------------- */
   /* Session list                                                      */
@@ -225,6 +237,33 @@ export function Panel(props: PanelProps) {
     })
   }, [])
 
+  /**
+   * Auto-close notices from the host (failed commands hidden by autoClose).
+   * Failures show the exit code/signal, title and a short output excerpt.
+   */
+  const showNoticeToast = useCallback(
+    (notice: TerminalNotice): void => {
+      const title = notice.title.trim() === '' ? notice.terminalId : notice.title
+      if (notice.reason === 'failed') {
+        const code = notice.exitCode ?? notice.signal ?? '—'
+        let text = t('autoClosedFailed', { code: String(code), title })
+        const excerpt = (notice.excerpt ?? '').trim()
+        if (excerpt !== '') {
+          text += ` — ${excerpt.length > 80 ? `${excerpt.slice(0, 79)}…` : excerpt}`
+        }
+        showToast(text, NOTICE_TOAST_MS)
+        return
+      }
+      showToast(t('autoClosedSucceeded', { title }), NOTICE_TOAST_MS)
+    },
+    [t, showToast],
+  )
+
+  // Keep the SSE subscription stable across renders even if the locale-bound
+  // `t` identity changes: the handler reads the latest callback via this ref.
+  const showNoticeToastRef = useRef(showNoticeToast)
+  showNoticeToastRef.current = showNoticeToast
+
   useEffect(() => {
     if (!streamEnabled) return
     let disposed = false
@@ -249,6 +288,9 @@ export function Panel(props: PanelProps) {
       },
       onSessions: (payload) => {
         if (!disposed) applySessions(payload)
+      },
+      onNotice: (notice) => {
+        if (!disposed) showNoticeToastRef.current(notice)
       },
     })
     return () => {
@@ -325,9 +367,9 @@ export function Panel(props: PanelProps) {
 
   const handleInputError = useCallback(
     (message: string): void => {
-      setToast(`${t('inputFailed')}: ${message}`)
+      showToast(`${t('inputFailed')}: ${message}`)
     },
-    [t],
+    [t, showToast],
   )
 
   /* ---------------------------------------------------------------- */
@@ -362,12 +404,12 @@ export function Panel(props: PanelProps) {
         controllerRef.current?.focus()
       }, 120)
     } catch (error) {
-      setToast(`${t('createFailed')}: ${errorMessage(error)}`)
+      showToast(`${t('createFailed')}: ${errorMessage(error)}`)
     } finally {
       creatingRef.current = false
       setCreating(false)
     }
-  }, [t])
+  }, [t, showToast])
 
   const closeTerminal = useCallback(
     async (id?: string): Promise<void> => {
@@ -381,10 +423,10 @@ export function Panel(props: PanelProps) {
       try {
         await closeSession(target)
       } catch (error) {
-        setToast(`${t('closeFailed')}: ${errorMessage(error)}`)
+        showToast(`${t('closeFailed')}: ${errorMessage(error)}`)
       }
     },
-    [t],
+    [t, showToast],
   )
 
   const reconnect = useCallback((): void => {
@@ -401,16 +443,16 @@ export function Panel(props: PanelProps) {
   const copyScreen = useCallback(async (): Promise<void> => {
     const text = controllerRef.current?.getVisibleText() ?? ''
     if (text.trim() === '') {
-      setToast(t('copyFailed'))
+      showToast(t('copyFailed'))
       return
     }
     const copied = await writeClipboard(text)
-    setToast(copied ? t('copied') : t('copyFailed'))
-  }, [t])
+    showToast(copied ? t('copied') : t('copyFailed'))
+  }, [t, showToast])
 
   useEffect(() => {
     if (!toast) return
-    const timer = window.setTimeout(() => setToast(null), TOAST_MS)
+    const timer = window.setTimeout(() => setToast(null), toast.duration)
     return () => window.clearTimeout(timer)
   }, [toast])
 
@@ -699,7 +741,7 @@ export function Panel(props: PanelProps) {
 
         {toast ? (
           <div className="dshtp-toast" role="status" data-dsh-tp-toast>
-            {toast}
+            {toast.text}
           </div>
         ) : null}
       </div>

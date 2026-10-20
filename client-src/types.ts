@@ -63,6 +63,25 @@ export interface ExitFrame {
   state?: SessionState
 }
 
+/**
+ * Global `notice` SSE event (e.g. the host auto-closed a command terminal).
+ *
+ * Protocol: `{ type: 'auto-close', reason: 'failed' | 'succeeded',
+ * terminalId, title, exitCode, signal, excerpt }`. `exitCode`, `signal` and
+ * `excerpt` are optional — clients must not assume they are present.
+ */
+export interface TerminalNotice {
+  type: 'auto-close'
+  reason: 'failed' | 'succeeded'
+  terminalId: string
+  /** Display title resolved by the host; the parser falls back to the id. */
+  title: string
+  exitCode?: number | null
+  signal?: string | null
+  /** Last non-empty output line, ANSI-stripped, ≤160 chars (host-truncated). */
+  excerpt?: string
+}
+
 /** Narrow a patch to a full `SessionInfo` (used before inserting unknowns). */
 export function isFullSessionInfo(value: SessionInfo | SessionInfoPatch): value is SessionInfo {
   const candidate = value as Partial<SessionInfo>

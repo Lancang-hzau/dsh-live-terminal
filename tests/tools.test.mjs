@@ -250,10 +250,35 @@ test('live_terminal_run creates a dedicated command session and returns its id',
   assert.equal(registry.calls.created.length, 1)
   assert.equal(registry.calls.created[0].command, 'Get-ChildItem')
   assert.equal(registry.calls.created[0].agentId, 'agent-1')
+  assert.equal(registry.calls.created[0].origin, 'tool')
+  assert.equal(registry.calls.created[0].keepOpen, false)
   assert.equal(registry.calls.ensured, 0, 'must not touch the interactive terminal')
   assert.equal(registry.calls.waited.length, 1, 'wait:true goes through waitForCommandSession')
   assert.match(text, /^\[terminal command-1\]/)
   assert.ok(text.includes('command output'))
+})
+
+test('live_terminal_run exposes keepOpen and passes it through', async () => {
+  const registry = fakeRegistry()
+  const { definitions } = setup(registry)
+  const runToolDefinition = definitions.get('live_terminal_run')
+  const keepOpenProperty = runToolDefinition.parameters.properties.keepOpen
+  assert.equal(keepOpenProperty.type, 'boolean')
+  assert.match(keepOpenProperty.description, /auto-close|auto close|stay open/i)
+  assert.match(runToolDefinition.description, /closes automatically|auto-close/i)
+
+  const { value, text } = await runTool(definitions, 'live_terminal_run', { command: 'Get-Date', keepOpen: true })
+  assert.equal(registry.calls.created[0].origin, 'tool')
+  assert.equal(registry.calls.created[0].keepOpen, true)
+  assert.equal(value.terminalId, 'command-1')
+  assert.ok(text.includes('keepOpen:true') || !text.includes('closes automatically'), 'render must not promise auto-close when keepOpen is set')
+})
+
+test('live_terminal_screenshot documents auto-close and keepOpen', () => {
+  const { definitions } = setup(fakeRegistry())
+  const screenshot = definitions.get('live_terminal_screenshot')
+  assert.match(screenshot.description, /close automatically|auto-close/i)
+  assert.match(screenshot.description, /keepOpen:true/)
 })
 
 test('live_terminal_run render always exposes the terminalId for screenshot follow-up', async () => {

@@ -12,6 +12,7 @@ import type {
   SessionInfo,
   SessionInfoPatch,
   SnapshotFrame,
+  TerminalNotice,
 } from './types'
 
 export const API_PREFIX = '/dsh-terminal-panel'
@@ -220,6 +221,38 @@ export function parseExit(value: unknown): ExitFrame | null {
   return { exitCode, signal, state }
 }
 
+/**
+ * Parse a global `notice` SSE frame (e.g. a command terminal auto-closed by
+ * the host). Defensive: unknown shapes return null and optional fields
+ * (`exitCode`/`signal`/`excerpt`) are only attached when recognisable.
+ */
+export function parseTerminalNotice(value: unknown): TerminalNotice | null {
+  const record = asRecord(value)
+  if (!record) return null
+  if (record.type !== 'auto-close') return null
+  const reason =
+    record.reason === 'failed' || record.reason === 'succeeded' ? record.reason : undefined
+  if (reason === undefined) return null
+  const terminalId = readString(record.terminalId)
+  if (terminalId === undefined || terminalId === '') return null
+  const title = readString(record.title)
+  const notice: TerminalNotice = {
+    type: 'auto-close',
+    reason,
+    terminalId,
+    title: title !== undefined && title !== '' ? title : terminalId,
+  }
+  if ('exitCode' in record) {
+    notice.exitCode = typeof record.exitCode === 'number' ? record.exitCode : null
+  }
+  if (record.signal === null || typeof record.signal === 'string') {
+    notice.signal = record.signal
+  }
+  const excerpt = readString(record.excerpt)
+  if (excerpt !== undefined) notice.excerpt = excerpt
+  return notice
+}
+
 /* ------------------------------------------------------------------ */
 /* HTTP helpers                                                        */
 /* ------------------------------------------------------------------ */
@@ -409,6 +442,8 @@ export interface SessionsStreamHandlers {
   onOpen?: () => void
   onError?: () => void
   onSessions: (payload: SessionInfo[] | SessionInfo) => void
+  /** Optional: global `notice` events (auto-closed terminals). */
+  onNotice?: (notice: TerminalNotice) => void
 }
 
 interface SessionsFeed {
@@ -450,6 +485,11 @@ export function openSessionsStream(handlers: SessionsStreamHandlers): () => void
       const parsed = parseSessionsPayload(payload)
       if (!parsed) return
       fanoutSessions(subscribers, (subscriber) => subscriber.onSessions(parsed))
+    })
+    listenSse(source, 'notice', (payload) => {
+      const notice = parseTerminalNotice(payload)
+      if (!notice) return
+      fanoutSessions(subscribers, (subscriber) => subscriber.onNotice?.(notice))
     })
     source.addEventListener('open', () => {
       feed.opened = true

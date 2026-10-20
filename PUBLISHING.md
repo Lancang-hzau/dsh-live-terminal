@@ -17,7 +17,7 @@
 
 - ✅ **`dsh-live-terminal@1.1.0` 已正式发布到 npmjs（latest）**：<https://www.npmjs.com/package/dsh-live-terminal>（2026-10-19 22:07 +08:00；`1.0.0` 为历史版本）
 - ✅ 发布产物已校验：npm tarball 18 files、shasum `cc4295cb9d4971c074c93daf21ef90c465f7c883`，包内 `lib/client.js` sha256 与本地构建一致；1.0.0 时曾用全新 DSH profile 从 npmjs 安装并启动验证通过
-- ✅ 单测 166/166（v1.1 本地，Node 22/24 双版本验证）、独立 e2e 44 PASS（v1.0 验收）、Desktop 实机验证通过；v1.1 验证见 `docs/test-report.md` §12
+- ✅ 单测 182/182（v1.2 本地，Node 22/24 双版本验证）、独立 e2e 44 PASS（v1.0 验收）、Desktop 实机验证通过；v1.1/v1.2 验证见 `docs/test-report.md` §12/§13
 - ✅ **`v1.1.0` 已推送 GitHub**：release commit `58dc780`（annotated tag `v1.1.0` → `58dc780`）已 push 到 `origin/main`；其后的 `18fdfba` 仅为 Node 22 测试兼容修复（不进入 npm 包，不影响已发布产物）
 - ✅ `screenshots.json`、`icon.svg`、`README.md`、CI workflow、catalog 条目样例已就绪
 - ✅ **GitHub 仓库已建好并推送**：<https://github.com/Lancang-hzau/dsh-live-terminal>（public；topics 已加 `dsh-plugin`/`dsh`/`deepseek-harness`/`cordis`/`terminal`/`pty`/`xterm`/`agent-tools`）
@@ -31,7 +31,7 @@
 
 > 注：npm 2026-10 起新包首版走 staged publishing——发布进入队列后需要维护者 2FA 批准。本项目 1.0.0 已通过该流程正式上线；下面的 §2.1 保留给以后新包的 staged 发布参考。
 >
-> CI 说明：host 单测断言 Windows 路径/argv 语义，因此 `.github/workflows/ci.yml` 使用 `windows-latest` 运行（不是 Linux），与本地 166/166 一致。
+> CI 说明：host 单测断言 Windows 路径/argv 语义，因此 `.github/workflows/ci.yml` 使用 `windows-latest` 运行（不是 Linux），与本地 182/182 一致。
 
 ---
 
@@ -84,7 +84,7 @@ cd "C:\Users\LANCANG\Desktop\Code\DSH Plugs\dsh-live-terminal"
 
 npm install
 npm run build        # 构建 client-src -> lib/client.js
-npm test             # 166 个 host 单测
+npm test             # 182 个 host 单测
 
 npm publish --registry=https://registry.npmjs.org --access public
 ```

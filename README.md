@@ -73,9 +73,21 @@ dsh plugin --profile web add dsh-live-terminal
     maxSessions: 16             # 同时保留的终端会话上限
     commandTimeoutMs: 180000    # live_terminal_run(wait:true) 的默认等待超时（live_terminal_open 仅做启动等待）；被接管的 pwsh 前台调用固定 120s 上限
     retainExited: 10            # 保留多少个已退出命令会话用于回看
+    interceptMinVisibleMs: 4500 # 被接管命令至少运行这么久（含 shell 启动开销）才上屏；更快的命令不产生 tab/不弹面板；0 = 全部上屏（旧行为）
+    autoCloseCommandDelayMs: 5000   # 成功结束的一次性命令终端延迟多久自动关闭；-1 = 永不自动关闭；0 = 下一 tick
+    autoCloseFailedDelayMs: 2000    # 失败/超时/中止的一次性命令终端延迟多久自动关闭；-1 = 永不自动关闭
+    autoCloseToolTerminals: true    # false = 只自动关闭被接管的命令，live_terminal_run 创建的终端不自动关
+    autoCloseNotice: failed         # failed | all | none：自动关闭时通过全局 SSE 发 notice 事件（client toast）
 ```
 
 把 `interceptShellTools` 设为 `false` 可完全恢复原生 shell 行为，只保留 agent 主动使用的 `live_terminal_*`。
+
+### 自动清理（v1.2）
+
+- **快速命令不上屏**：被接管的内置 `pwsh`/`bash` 前台命令如果运行时间短于 `interceptMinVisibleMs`（默认 4500ms；Windows 上含 PowerShell/ConPTY 约 3–4s 的启动开销，因此普通秒级命令默认完全不上屏），不会产生终端 tab、不触发右侧栏自动弹出、也不发 `sessions` 事件；失败时只发一条 `notice`（见下）。想要旧行为可设 `0`，或按本机 shell 启动开销调整。
+- **结束后自动关闭**：一次性命令终端在命令结束后自动关闭——成功默认 `autoCloseCommandDelayMs`（5000ms），失败/超时/中止默认 `autoCloseFailedDelayMs`（2000ms）。`live_terminal_run` 创建的终端同样适用（可用 `autoCloseToolTerminals: false` 关闭该行为），工具参数 `keepOpen: true` 可保留该终端。
+- **永不自动关闭**：用户新建的终端、交互式终端、每个 agent 的默认交互终端；正在选中的 tab 也会被直接关闭（由 client 处理选中态）。
+- **失败通知**：自动关闭失败命令时，通过全局 SSE（`GET /dsh-terminal-panel/events`）发 `notice` 事件：`{ type: 'auto-close', reason: 'failed' | 'succeeded', terminalId, title, exitCode, signal, excerpt }`（`excerpt` 为输出尾部最后一个非空行，≤160 字符）。`autoCloseNotice` 控制发送范围：`failed`（默认，仅失败）/ `all`（成功也发）/ `none`（不发）。
 
 ## 兼容性
 
@@ -109,7 +121,7 @@ dsh plugin --profile web add dsh-live-terminal
 - **SSE 背压上限**：每条 SSE 连接缓冲上限 4MiB，超出时断开该慢客户端连接（EventSource 按 `retry: 1000` 重连并重新同步 snapshot），保护 host 内存。
 - **插件激活修复**：`apply()` 在 `subprocess`/`workingDirectory` 已就绪（direct 分支）时不再抛出 `TypeError`。
 - **客户端增强**：输入串行队列（32KB 分片 + 失败提示）、HTTP 10s 超时、全局 sessions SSE 单例、主题/resize 去抖、tabs/overlay a11y（键盘导航/aria）。
-- 版本 **1.1.0**（client 版本号由构建期注入，与 package.json 一致）。
+- 版本 **1.2.0**（client 版本号由构建期注入，与 package.json 一致）。
 
 ## 为什么自研
 
@@ -140,7 +152,7 @@ screenshots.json     市场截图清单
 ```powershell
 npm install                          # 安装构建/测试依赖
 npm run build                        # 构建 client-src → lib/client.js
-npm test                             # host 单元测试（166 cases）
+npm test                             # host 单元测试（182 cases）
 npm run typecheck
 
 # 独立 dev host（不影响正在运行的 Desktop DSH）
@@ -150,7 +162,7 @@ npm run typecheck
 
 CI（GitHub Actions）：`windows-latest` 用 Node 22/24 跑全量（`npm ci` → `npm run build` → bundle freshness（`git diff --exit-code -- lib/client.js`，产物未同步即失败）→ `npm test` → `npm run typecheck`）；`ubuntu-latest`（Node 24）跑平台无关测试子集（排除断言 Windows 路径语义的 `tests/registry.test.mjs`）。配置见 `.github/workflows/ci.yml`。
 
-本机验收（2026-10-19）：host 单测 166/166 PASS；独立 e2e（真实 Chrome）44 PASS / 0 FAIL / 1 SKIP（v1.0 验收数字）；真实 agent 手动项（命令拦截可见、自动弹出、`live_terminal_run` + `live_terminal_screenshot`、cwd）全部 PASS；Desktop 实机安装并重启后验证通过。v1.1 复核数字（host 单测 166/166、e2e、浏览器探针）见 [`docs/test-report.md`](./docs/test-report.md) 的「v1.1 验证补充」。
+本机验收（2026-10-19）：host 单测 182/182 PASS；独立 e2e（真实 Chrome）44 PASS / 0 FAIL / 1 SKIP（v1.0 验收数字）；真实 agent 手动项（命令拦截可见、自动弹出、`live_terminal_run` + `live_terminal_screenshot`、cwd）全部 PASS；Desktop 实机安装并重启后验证通过。v1.1/v1.2 复核数字（host 单测 182/182、e2e、浏览器探针）见 [`docs/test-report.md`](./docs/test-report.md) 的「v1.1 验证补充」与「v1.2 终端自动清理验证」。
 
 ### 发布
 
