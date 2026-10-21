@@ -331,3 +331,29 @@ node tools/qa-e2e.mjs --slow --host-log=qa/artifacts/devhost-3105-final2.log "<t
 | 独立验证 | host 行为 **41/41** + notice 模式 **3/3** PASS；client `parseTerminalNotice` **5/5**；发现并修复「先建会话后连 SSE 的 `sessions` 事件抑制」P2 边界（含回归测试） |
 
 - 结论：v1.2.0 已发布（npm + GitHub Release）；自动清理行为在真实 Desktop 中验证通过；Desktop profile 已于 2026-10-20 切换到 npm 安装的 1.2.0（非 junction，client sha `71E945EF…`）；插件市场 catalog PR **#8299** 已提交，Submission gate 与 PR check 全部通过、mergeable clean，等待维护者合并。
+
+---
+
+## 14. v1.2.1 全量功能 / 交互 / UI 升级验证（2026-10-21）
+
+> v1.2.1 按评审报告把功能、用户操作习惯、界面 UI 的建议全部落在一个版本；与 §13 冲突时以本节为准。实现契约见 [`impl-1.2.1-contract.md`](./impl-1.2.1-contract.md)，评审输入见 [`review-2026-10-21-ux-feature.md`](./review-2026-10-21-ux-feature.md)。
+
+| 项 | v1.2.1 结果 |
+|---|---|
+| host 单元测试 | **232/232 PASS**（基线 195 → 232；新增 history/keys/ports/exec/screenshot-png + 新工具/新路由/租约/沙箱/配额/暂停保留等覆盖）；Node 24.13.0，连续两次全量运行一致 |
+| TypeScript | `npm run typecheck` **0 error**（strict；含 `client-src/**`、`tests/**`、`tools/**`） |
+| 构建产物 | `lib/client.js` **562,416 B / gzip 148,526 B / sha256 `289CC5B3…6724A`**，`version:"1.2.1"`；exact 17 个工具注册 |
+| 真实 dev host UI 冒烟 | **16 PASS / 0 FAIL / 0 SKIP**（`tools/smoke-ui-121.mjs`）：bundle 1.2.1、`/ping` 版本、`/config` 生效值、`/history`、面板挂载、32px chrome、新建终端、输入回显、`⋯` 菜单（历史/配置/快捷键/PNG/导出）、`Ctrl+F` 搜索命中、配置对话框、0 page error、0 console error |
+| 真实 agent 本地验收 | **16 PASS / 0 FAIL**（`tools/accept-121.mjs`，真实 agent 回合）：pwsh 前台命令被接管为可见命令终端、面板自动打开、输出上屏、8s 后自动关闭、关闭后输出仍在历史；`live_terminal_run(keepOpen:true)` 创建可见终端并跨过 8s 不关闭；`live_terminal_read` 回读输出；0 page error / 0 5xx / 0 console error |
+| 验收中发现并修复 | 终端退出与 resize/input 竞态导致 `/resize` 500（现返回 `{ok:false,reason:'not-running'}` 的 200 no-op）；`/input` 同样按 no-op 处理 |
+| 自动清理 | 成功 8s / 失败 30s；倒计时暂停/保留/恢复；隐藏命令按首帧输出计时；关闭命令写入历史（含 agentId/sessionId/owner） |
+| 历史与回放 | CommandHistory LRU + 原子 JSON 落盘（0600/0700）；`/history`、`/replay`、`/export`；read/screenshot/status/search/export 按原 terminalId 回退历史；agent-facing 历史按 agentId 过滤 |
+| 工具面 | 17 个 `live_terminal_*`：run/screenshot/send/read/search/wait/expect/status/signal/resize/exec/list/history/open/close/rename/export；run/open 支持 cwd/shell/cols/rows/env；screenshot 支持 text/ansi/png（PNG 由浏览器 canvas 回传，无浏览器时文本回退 + warnings） |
+| 多端 / 租约 | per-session SSE `clientId` + `/take-control` + `/input` 非 writer 返回 409 `READ_ONLY`；`fromSeq` 补帧；`/capture` 8MiB body / 4MiB decoded |
+| 快捷键 | 面板局部键盘映射（open/new/close/follow），**不注入 DSH `shortcuts` 服务**：实测注入该服务会与 `page.close` 冲突并使 `uiWorkspace` 客户端启动失败；改为局部监听后 dev host 启动 0 失败 |
+| 安全 | `sandbox` 标注 + 未沙箱横幅 + 首启提示；`requireSandbox`/`allowUnconfined` 回退/拒绝；后台/升权调用仍不接管 |
+| 界面 | 32px chrome、单一 hairline、活动 tab 对比度、12px secondary、24×24 命中区、窄栏 container query、状态栏按需隐藏、banner 替代全覆盖遮罩、焦点管理、深色 token、reduced-motion、全局 Toast 与欢迎卡 |
+| 已知限制 | PNG 需浏览器连接；实时进程不跨 Host 重启（历史保留）；`live_terminal_exec` 仅 pwsh/POSIX；会话仍为 Host 全局（面板默认按当前会话过滤） |
+| 发布状态 | 版本号/文档/构建统一为 **1.2.1**；尚未执行 npm publish / Desktop 切换（需用户确认后单独操作） |
+
+- 结论：v1.2.1 的功能、交互、界面升级已完成并通过 host 单测、typecheck、构建、真实 dev host UI 冒烟与真实 agent 本地验收；`npm test` 232/232，UI 冒烟 16/16，agent 验收 16/16。

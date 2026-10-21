@@ -3,15 +3,25 @@ import { test } from 'node:test'
 import { apply } from '../lib/index.js'
 import { ROUTE_PREFIX } from '../lib/host/routes.js'
 
-/** Tool names registered by `registerTools`. */
+/** Tool names registered by `registerTools` (v1.2.1). */
 const TOOL_NAMES = [
   'live_terminal_close',
+  'live_terminal_exec',
+  'live_terminal_expect',
+  'live_terminal_export',
+  'live_terminal_history',
   'live_terminal_list',
   'live_terminal_open',
   'live_terminal_read',
+  'live_terminal_rename',
+  'live_terminal_resize',
   'live_terminal_run',
   'live_terminal_screenshot',
+  'live_terminal_search',
   'live_terminal_send',
+  'live_terminal_signal',
+  'live_terminal_status',
+  'live_terminal_wait',
 ]
 
 /**
@@ -114,7 +124,7 @@ test('apply with ready services (direct branch) does not throw and registers the
   const { ctx, calls } = makeContext({
     services: { subprocess: fakeSubprocess(), workingDirectory: { defaultDirectory: 'C:\\work' } },
   })
-  assert.doesNotThrow(() => apply(ctx, {}))
+  assert.doesNotThrow(() => apply(ctx, { historyPath: '' }))
 
   assert.deepEqual(calls.tools.map((definition) => definition.name).sort(), TOOL_NAMES)
   assert.deepEqual(calls.listeners.map((listener) => listener.event), ['tools/execute'])
@@ -130,7 +140,7 @@ test('apply with ready services (direct branch) does not throw and registers the
 
 test('apply defers registry initialization until subprocess + workingDirectory are injected', async () => {
   const { ctx, calls } = makeContext()
-  assert.doesNotThrow(() => apply(ctx, {}))
+  assert.doesNotThrow(() => apply(ctx, { historyPath: '' }))
 
   assert.equal(calls.tools.length, TOOL_NAMES.length, 'tools register without the backend')
   const backendInjection = findInjection(calls, ['subprocess', 'workingDirectory'])
@@ -144,7 +154,7 @@ test('apply defers registry initialization until subprocess + workingDirectory a
   // Simulate the services being provided: the injected callback initializes the backend.
   backendInjection.callback({ subprocess: fakeSubprocess(), workingDirectory: { defaultDirectory: 'C:\\work' } })
   assert.ok(calls.effects.some((effect) => effect.label === 'dsh-live-terminal: terminal sessions'))
-  assert.deepEqual(await listTool.execute({}, {}), { terminals: [] })
+  assert.deepEqual(await listTool.execute({}, {}), { terminals: [], historyCount: 0 })
   assert.ok(calls.logs.some((message) => message.includes('terminal backend ready')))
 })
 
@@ -152,7 +162,7 @@ test('apply does not register the tools/execute interceptor when interceptShellT
   const { ctx, calls } = makeContext({
     services: { subprocess: fakeSubprocess(), workingDirectory: { defaultDirectory: 'C:\\work' } },
   })
-  apply(ctx, { interceptShellTools: false })
+  apply(ctx, { interceptShellTools: false, historyPath: '' })
   assert.equal(calls.listeners.filter((listener) => listener.event === 'tools/execute').length, 0)
   assert.ok(calls.logs.some((message) => message.includes('interceptShellTools=false')))
 })
@@ -173,7 +183,7 @@ test('apply registers HTTP routes directly when webServer + connection exist', (
   const { ctx, calls } = makeContext({
     services: { subprocess: fakeSubprocess(), workingDirectory: { defaultDirectory: 'C:\\work' }, webServer, connection },
   })
-  apply(ctx, {})
+  apply(ctx, { historyPath: '' })
 
   assert.ok(webServer.spec, 'webServer.register must be called')
   assert.equal(webServer.spec.kind, 'prefix')
@@ -187,7 +197,7 @@ test('apply defers HTTP routes through inject when webServer/connection are miss
   const { ctx, calls } = makeContext({
     services: { subprocess: fakeSubprocess(), workingDirectory: { defaultDirectory: 'C:\\work' } },
   })
-  apply(ctx, {})
+  apply(ctx, { historyPath: '' })
 
   const routesInjection = findInjection(calls, ['webServer', 'connection'])
   assert.ok(routesInjection, 'must wait for webServer + connection')
@@ -217,7 +227,7 @@ test('apply registers the system-prompt guide through inject', () => {
   const { ctx, calls } = makeContext({
     services: { subprocess: fakeSubprocess(), workingDirectory: { defaultDirectory: 'C:\\work' } },
   })
-  apply(ctx, {})
+  apply(ctx, { historyPath: '' })
 
   const promptInjection = findInjection(calls, ['systemPrompt'])
   assert.ok(promptInjection, 'must wait for the systemPrompt service')
@@ -245,7 +255,7 @@ test('the terminal-session disposer disposes the registry', async () => {
   const { ctx, calls } = makeContext({
     services: { subprocess: fakeSubprocess(), workingDirectory: { defaultDirectory: 'C:\\work' } },
   })
-  apply(ctx, {})
+  apply(ctx, { historyPath: '' })
   const openTool = calls.tools.find((definition) => definition.name === 'live_terminal_open')
   const backendEffect = calls.effects.find((effect) => effect.label === 'dsh-live-terminal: terminal sessions')
   await backendEffect.disposer()

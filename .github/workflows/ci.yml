@@ -49,11 +49,16 @@ jobs:
           node --test --test-isolation=none
           tests/apply.test.mjs
           tests/ansi.test.mjs
+          tests/exec.test.mjs
+          tests/history.test.mjs
           tests/intercept.test.mjs
           tests/intercept-value.test.mjs
+          tests/keys.test.mjs
+          tests/ports.test.mjs
           tests/ring.test.mjs
           tests/routes.test.mjs
           tests/screen.test.mjs
+          tests/screenshot-png.test.mjs
           tests/session.test.mjs
           tests/shell.test.mjs
           tests/tools.test.mjs

@@ -369,3 +369,18 @@ export function apply(ctx) {
 | 终端自动清理（v1.2） | 被接管命令短于 `interceptMinVisibleMs` 完全不上屏（无 tab/无自动弹出/无 `sessions` 事件）；一次性命令结束后自动关闭（成功 `autoCloseCommandDelayMs`、失败/超时/中止 `autoCloseFailedDelayMs`，`-1` 关闭该行为），`live_terminal_run` 受 `autoCloseToolTerminals` 控制、工具参数 `keepOpen:true` 可保留；用户/交互式/agent 默认终端永不自动关闭；自动关闭失败命令时全局 SSE 发 `notice`（`autoCloseNotice` 控制范围）。 |
 | client | 输入串行队列（单请求 ≤32KB 分片、失败上报）、HTTP 10s 超时、全局 sessions SSE 单例、主题/resize 去抖、tabs/overlay a11y 增强；client 版本号由构建期 `__PLUGIN_VERSION__` 注入。 |
 | 版本 | `1.2.0`。 |
+
+## 9. 修订记录（v1.2.1）
+
+v1.2.1 的完整接口契约见 [`impl-1.2.1-contract.md`](./impl-1.2.1-contract.md)。覆盖要点：
+
+| 领域 | v1.2.1 契约调整 |
+|---|---|
+| 配置 | 新增 `perSessionMaxSessions`、`historySize`、`historyPath`、`historyPersist`、`requireSandbox`、`allowUnconfined`、`portDetection`；`interceptMinVisibleMs` 默认 1500 且从 shell 首帧输出计时；`autoCloseCommandDelayMs` 8000、`autoCloseFailedDelayMs` 30000、`autoCloseNotice: 'all'`。 |
+| SessionInfo | 新增 `signal`、`startedAt`、`endedAt`、`durationMs`、`shellKind`、`ports`、`sandbox`、`autoCloseAt`、`autoClosePaused`、`pinned`。 |
+| 历史 | 新增 `CommandHistory`（LRU + 原子 JSON 落盘）；命令会话退出/关闭即记录；`read/screenshot/status/search/export` 可按原 terminalId 回退历史；`GET /history`、`live_terminal_history`。 |
+| 自动关闭 | 倒计时字段 `autoCloseAt`；`POST /keep`、`POST /auto-close {pause|resume}`；失败延迟长于成功；`notice` 增加 `historyId`/`durationMs`/`command-finished`/`port`。 |
+| 工具面 | 新增 `live_terminal_wait/status/signal/resize/read` 分页/`search`/`expect/exec/history/rename/export`；`run/open` 支持 `cwd/shell/cols/rows/env`；`screenshot` 支持 `text/ansi/png`；`send` 支持 `keys`/`paste`；只读工具声明 `isConcurrencySafe`。 |
+| 路由 | 新增 `/config`、`/history`、`/replay`、`/export`、`/keep`、`/auto-close`、`/rename`、`/take-control`、`/signal`、`/capture`；per-session SSE 支持 `clientId`/`fromSeq` 与 `capture-request`；多客户端输入租约（非 writer 返回 409 `READ_ONLY`）。 |
+| 客户端 | 紧凑会话条 + `⋯` 菜单 + 跟随/固定；自动关闭倒计时/保留；历史视图；重命名；选区复制/右键菜单/`Ctrl+F` 搜索；全局通知与首次引导；`ctx.shortcuts` 键盘命令；PNG capture 回传；错误 banner、连接态、焦点管理、对比度与窄栏适配。 |
+| 版本 | `1.2.1`。 |

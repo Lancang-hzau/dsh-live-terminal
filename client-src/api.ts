@@ -1,18 +1,31 @@
 /**
- * HTTP / SSE client for the `dsh-live-terminal` host half.
+ * HTTP / SSE client for the `dsh-live-terminal` host half (1.2.1).
  *
  * All requests are same-origin and authenticated by the DSH session cookie
  * (architecture.md §4.4). Every payload is parsed defensively so that the UI
- * can render even while the host half is still being implemented.
+ * can render even against an older/partial host half.
  */
 
-import type {
-  ExitFrame,
-  OutputFrame,
-  SessionInfo,
-  SessionInfoPatch,
-  SnapshotFrame,
-  TerminalNotice,
+import {
+  parseCaptureRequest,
+  parseConfigInfo,
+  parseExit,
+  parseHistoryPayload,
+  parseNotice,
+  parseOutput,
+  parseSessionInfo,
+  parseSessionPatch,
+  parseSnapshot,
+  parseSessionsPayload,
+  type CaptureRequestFrame,
+  type ConfigInfo,
+  type ExitFrame,
+  type HistoryEntry,
+  type Notice,
+  type OutputFrame,
+  type SessionInfo,
+  type SessionInfoPatch,
+  type SnapshotFrame,
 } from './types'
 
 export const API_PREFIX = '/dsh-terminal-panel'
@@ -24,19 +37,74 @@ export const API_PREFIX = '/dsh-terminal-panel'
  */
 const REQUEST_TIMEOUT_MS = 10_000
 
-/** Error carrying the HTTP status so the panel can explain "host not ready". */
+/** localStorage key holding this browser page's stable client id. */
+export const CLIENT_ID_STORAGE_KEY = 'dsh-live-terminal.client-id'
+
+/* ------------------------------------------------------------------ */
+/* Client identity (multi-tab input lease)                             */
+/* ------------------------------------------------------------------ */
+
+let cachedClientId: string | null = null
+
+function makeRandomId(): string {
+  try {
+    const cryptoObject = globalThis.crypto
+    if (cryptoObject && typeof cryptoObject.randomUUID === 'function') {
+      return cryptoObject.randomUUID()
+    }
+  } catch {
+    // fall through to the Math.random fallback
+  }
+  // Not a security primitive: only distinguishes browser tabs of one user.
+  const random = Math.random().toString(36).slice(2)
+  return `client-${Date.now().toString(36)}-${random}`
+}
+
+/**
+ * Stable id for this browser page/tab. Persisted in localStorage so a reload
+ * keeps the same input lease; created on first use when absent/unreadable.
+ */
+export function getClientId(): string {
+  if (cachedClientId !== null) return cachedClientId
+  let stored: string | null = null
+  try {
+    stored = globalThis.localStorage?.getItem(CLIENT_ID_STORAGE_KEY) ?? null
+  } catch {
+    stored = null
+  }
+  if (typeof stored === 'string' && stored.length > 0) {
+    cachedClientId = stored
+    return stored
+  }
+  const created = makeRandomId()
+  try {
+    globalThis.localStorage?.setItem(CLIENT_ID_STORAGE_KEY, created)
+  } catch {
+    // Private mode / blocked storage: keep the in-memory id for this page.
+  }
+  cachedClientId = created
+  return created
+}
+
+/* ------------------------------------------------------------------ */
+/* Errors                                                              */
+/* ------------------------------------------------------------------ */
+
+/** Error carrying the HTTP status/code so the panel can explain failures. */
 export class ApiError extends Error {
   readonly status: number
+  readonly code: string | undefined
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, code?: string) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.code = code
   }
 }
 
 /* ------------------------------------------------------------------ */
-/* Small defensive readers                                             */
+/* Defensive readers                                                   */
 /* ------------------------------------------------------------------ */
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -46,211 +114,6 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function readString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined
-}
-
-function readNumber(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
-}
-
-function firstRecord(...values: unknown[]): Record<string, unknown> | null {
-  for (const value of values) {
-    const record = asRecord(value)
-    if (record) return record
-  }
-  return null
-}
-
-/* ------------------------------------------------------------------ */
-/* Payload parsers                                                     */
-/* ------------------------------------------------------------------ */
-
-/** Parse a full `SessionInfo` (list items, snapshots, `state` frames). */
-export function parseSessionInfo(value: unknown): SessionInfo | null {
-  const record = asRecord(value)
-  if (!record) return null
-  for (const key of ['info', 'session', 'terminal', 'tab']) {
-    const nested = asRecord(record[key])
-    if (nested) {
-      const parsed = parseSessionInfo(nested)
-      if (parsed) return parsed
-    }
-  }
-  const id = readString(record.id) ?? readString(record.terminalId)
-  if (!id) return null
-  const state =
-    record.state === 'exited' || record.state === 'failed' || record.state === 'running'
-      ? record.state
-      : 'running'
-  const info: SessionInfo = {
-    id,
-    title: readString(record.title) ?? readString(record.name) ?? id,
-    kind: record.kind === 'command' ? 'command' : 'interactive',
-    owner: record.owner === 'agent' ? 'agent' : 'user',
-    cwd: readString(record.cwd) ?? '',
-    cols: Math.max(2, readNumber(record.cols) ?? 80),
-    rows: Math.max(1, readNumber(record.rows) ?? 24),
-    state,
-    exitCode: typeof record.exitCode === 'number' ? record.exitCode : null,
-    createdAt: readNumber(record.createdAt) ?? 0,
-    updatedAt: readNumber(record.updatedAt) ?? 0,
-  }
-  const sessionId = readString(record.sessionId)
-  if (sessionId !== undefined) info.sessionId = sessionId
-  const agentId = readString(record.agentId)
-  if (agentId !== undefined) info.agentId = agentId
-  const command = readString(record.command)
-  if (command !== undefined) info.command = command
-  const error = readString(record.error)
-  if (error !== undefined) info.error = error
-  return info
-}
-
-/** Parse a partial session update; unknown ids are ignored by the panel. */
-export function parseSessionPatch(value: unknown): SessionInfoPatch | null {
-  const outer = asRecord(value)
-  if (!outer) return null
-  const record =
-    firstRecord(outer.info, outer.session, outer.terminal) ?? outer
-  const id = readString(record.id) ?? readString(record.terminalId) ?? readString(outer.id)
-  if (!id) return null
-  const patch: Record<string, unknown> = { id }
-  const title = readString(record.title) ?? readString(record.name)
-  if (title !== undefined) patch.title = title
-  if (record.kind === 'command' || record.kind === 'interactive') patch.kind = record.kind
-  if (record.owner === 'agent' || record.owner === 'user') patch.owner = record.owner
-  const sessionId = readString(record.sessionId)
-  if (sessionId !== undefined) patch.sessionId = sessionId
-  const agentId = readString(record.agentId)
-  if (agentId !== undefined) patch.agentId = agentId
-  const command = readString(record.command)
-  if (command !== undefined) patch.command = command
-  const cwd = readString(record.cwd)
-  if (cwd !== undefined) patch.cwd = cwd
-  const cols = readNumber(record.cols)
-  if (cols !== undefined) patch.cols = cols
-  const rows = readNumber(record.rows)
-  if (rows !== undefined) patch.rows = rows
-  if (
-    record.state === 'running' ||
-    record.state === 'exited' ||
-    record.state === 'failed'
-  ) {
-    patch.state = record.state
-  }
-  if ('exitCode' in record) {
-    patch.exitCode = typeof record.exitCode === 'number' ? record.exitCode : null
-  }
-  const error = readString(record.error)
-  if (error !== undefined) patch.error = error
-  const createdAt = readNumber(record.createdAt)
-  if (createdAt !== undefined) patch.createdAt = createdAt
-  const updatedAt = readNumber(record.updatedAt)
-  if (updatedAt !== undefined) patch.updatedAt = updatedAt
-  return patch as SessionInfoPatch
-}
-
-/** Parse the global `sessions` SSE frame: a list or a single updated session. */
-export function parseSessionsPayload(value: unknown): SessionInfo[] | SessionInfo | null {
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => parseSessionInfo(item))
-      .filter((item): item is SessionInfo => item !== null)
-  }
-  const record = asRecord(value)
-  if (!record) return null
-  for (const key of ['sessions', 'list', 'terminals']) {
-    if (Array.isArray(record[key])) return parseSessionsPayload(record[key])
-  }
-  return parseSessionInfo(value)
-}
-
-/** Parse a `snapshot` frame or the `GET /snapshot` response. */
-export function parseSnapshot(value: unknown): SnapshotFrame | null {
-  const record = asRecord(value)
-  if (!record) return null
-  const body = firstRecord(record.snapshot, record.frame) ?? record
-  const info = parseSessionInfo(
-    record.info ?? record.session ?? record.terminal ?? body.info ?? body.session,
-  )
-  const screen =
-    readString(body.screen) ?? readString(body.ansi) ?? readString(body.data) ?? ''
-  const text = readString(body.text) ?? readString(record.text) ?? ''
-  const cursorRecord = firstRecord(body.cursor, record.cursor)
-  const cursor = cursorRecord
-    ? {
-        x: readNumber(cursorRecord.x) ?? 0,
-        y: readNumber(cursorRecord.y) ?? 0,
-      }
-    : undefined
-  const seq = readNumber(record.seq) ?? readNumber(body.seq)
-  return { info: info ?? undefined, screen, text, cursor, seq }
-}
-
-/** Parse an `output` frame. Accepts `{chunk}`, `{data}`, `{output}` or a raw string. */
-export function parseOutput(value: unknown): OutputFrame | null {
-  if (typeof value === 'string') return { seq: null, chunk: value }
-  const record = asRecord(value)
-  if (!record) return null
-  const chunk =
-    readString(record.chunk) ??
-    readString(record.data) ??
-    readString(record.output) ??
-    readString(record.text)
-  if (chunk === undefined) return null
-  const seq = readNumber(record.seq) ?? null
-  return { seq, chunk }
-}
-
-/** Parse an `exit` frame. */
-export function parseExit(value: unknown): ExitFrame | null {
-  const record = asRecord(value)
-  if (!record) return null
-  const nested = firstRecord(record.info, record.session, record.terminal)
-  const source = nested ?? record
-  const exitCode =
-    typeof source.exitCode === 'number'
-      ? source.exitCode
-      : typeof record.exitCode === 'number'
-        ? record.exitCode
-        : typeof source.code === 'number'
-          ? source.code
-          : null
-  const signal = readString(source.signal) ?? null
-  const state =
-    source.state === 'exited' || source.state === 'failed' ? source.state : undefined
-  return { exitCode, signal, state }
-}
-
-/**
- * Parse a global `notice` SSE frame (e.g. a command terminal auto-closed by
- * the host). Defensive: unknown shapes return null and optional fields
- * (`exitCode`/`signal`/`excerpt`) are only attached when recognisable.
- */
-export function parseTerminalNotice(value: unknown): TerminalNotice | null {
-  const record = asRecord(value)
-  if (!record) return null
-  if (record.type !== 'auto-close') return null
-  const reason =
-    record.reason === 'failed' || record.reason === 'succeeded' ? record.reason : undefined
-  if (reason === undefined) return null
-  const terminalId = readString(record.terminalId)
-  if (terminalId === undefined || terminalId === '') return null
-  const title = readString(record.title)
-  const notice: TerminalNotice = {
-    type: 'auto-close',
-    reason,
-    terminalId,
-    title: title !== undefined && title !== '' ? title : terminalId,
-  }
-  if ('exitCode' in record) {
-    notice.exitCode = typeof record.exitCode === 'number' ? record.exitCode : null
-  }
-  if (record.signal === null || typeof record.signal === 'string') {
-    notice.signal = record.signal
-  }
-  const excerpt = readString(record.excerpt)
-  if (excerpt !== undefined) notice.excerpt = excerpt
-  return notice
 }
 
 /* ------------------------------------------------------------------ */
@@ -277,8 +140,10 @@ async function requestJson(path: string, init?: RequestInit): Promise<unknown> {
   if (!response.ok) {
     const record = asRecord(payload)
     const message =
-      (record && readString(record.error)) || `HTTP ${response.status}`
-    throw new ApiError(message, response.status)
+      (record && readString(record.error)) ||
+      (typeof payload === 'string' && payload !== '' ? payload : `HTTP ${response.status}`)
+    const code = record ? readString(record.code) : undefined
+    throw new ApiError(message, response.status, code)
   }
   return payload
 }
@@ -291,12 +156,36 @@ function postJson(path: string, body: unknown): Promise<unknown> {
   })
 }
 
+function readSessionPayload(value: unknown): SessionInfo | null {
+  const record = asRecord(value)
+  if (!record) return parseSessionInfo(value)
+  const nested = record.session ?? record.info ?? record.terminal
+  if (nested !== undefined) {
+    const info = parseSessionInfo(nested)
+    if (info) return info
+  }
+  return parseSessionInfo(record)
+}
+
 /* ------------------------------------------------------------------ */
 /* REST API                                                            */
 /* ------------------------------------------------------------------ */
 
-export async function listSessions(): Promise<SessionInfo[]> {
-  const payload = await requestJson('/sessions')
+/** `GET /config` — read-only effective configuration. */
+export async function fetchConfig(): Promise<ConfigInfo> {
+  const payload = await requestJson('/config')
+  const parsed = parseConfigInfo(payload)
+  if (!parsed) throw new ApiError('config returned an invalid payload', 500)
+  return parsed
+}
+
+/** `GET /sessions?sessionId=` — optional DSH session filter. */
+export async function listSessions(options?: { sessionId?: string }): Promise<SessionInfo[]> {
+  const query =
+    options?.sessionId !== undefined && options.sessionId !== ''
+      ? `?sessionId=${encodeURIComponent(options.sessionId)}`
+      : ''
+  const payload = await requestJson(`/sessions${query}`)
   const record = asRecord(payload)
   const rawList = Array.isArray(payload)
     ? payload
@@ -308,36 +197,24 @@ export async function listSessions(): Promise<SessionInfo[]> {
     .filter((item): item is SessionInfo => item !== null)
 }
 
-export interface CreateSessionOptions {
-  cols: number
-  rows: number
-  /**
-   * Conversation session id this panel body belongs to. The host resolves the
-   * working directory from it (P2-1); optional so the helper stays reusable.
-   */
-  sessionId?: string
-  title?: string
+/** `GET /history?limit=&terminalId=` — closed command terminals, newest first. */
+export async function fetchHistory(options?: {
+  limit?: number
+  terminalId?: string
+}): Promise<HistoryEntry[]> {
+  const params = new URLSearchParams()
+  if (typeof options?.limit === 'number' && Number.isFinite(options.limit)) {
+    params.set('limit', String(Math.max(1, Math.round(options.limit))))
+  }
+  if (options?.terminalId !== undefined && options.terminalId !== '') {
+    params.set('terminalId', options.terminalId)
+  }
+  const query = params.toString()
+  const payload = await requestJson(`/history${query === '' ? '' : `?${query}`}`)
+  return parseHistoryPayload(payload)
 }
 
-export async function createSession(options: CreateSessionOptions): Promise<SessionInfo> {
-  const payload = await postJson('/create', {
-    cols: Math.max(2, Math.round(options.cols)),
-    rows: Math.max(1, Math.round(options.rows)),
-    // JSON.stringify drops `undefined`, so the body keeps the contracted shape
-    // `{ cols, rows, sessionId }` while sessionId remains optional.
-    sessionId: options.sessionId,
-    ...(options.title !== undefined ? { title: options.title } : {}),
-  })
-  const record = asRecord(payload)
-  const info = parseSessionInfo(
-    record && (record.session ?? record.info ?? record.terminal) !== undefined
-      ? (record.session ?? record.info ?? record.terminal)
-      : payload,
-  )
-  if (!info) throw new ApiError('create returned an invalid session payload', 500)
-  return info
-}
-
+/** `GET /snapshot?id=` — seed the screen over REST. */
 export async function fetchSnapshot(id: string): Promise<SnapshotFrame> {
   const payload = await requestJson(`/snapshot?id=${encodeURIComponent(id)}`)
   const frame = parseSnapshot(payload)
@@ -345,11 +222,64 @@ export async function fetchSnapshot(id: string): Promise<SnapshotFrame> {
   return frame
 }
 
-export async function sendInput(id: string, data: string): Promise<void> {
-  if (data === '') return
-  await postJson('/input', { id, data })
+/** `GET /replay?id=&fromSeq=` — bounded output frames after `fromSeq`. */
+export async function fetchReplay(
+  id: string,
+  fromSeq: number,
+): Promise<{ frames: OutputFrame[]; nextSeq: number }> {
+  const payload = await requestJson(
+    `/replay?id=${encodeURIComponent(id)}&fromSeq=${encodeURIComponent(String(Math.max(0, Math.floor(fromSeq))))}`,
+  )
+  const record = asRecord(payload)
+  const rawFrames = record && Array.isArray(record.frames) ? record.frames : []
+  const frames = rawFrames
+    .map((frame) => parseOutput(frame))
+    .filter((frame): frame is OutputFrame => frame !== null)
+  const nextSeq =
+    record && typeof record.nextSeq === 'number' && Number.isFinite(record.nextSeq)
+      ? record.nextSeq
+      : fromSeq
+  return { frames, nextSeq }
 }
 
+export interface CreateSessionOptions {
+  cols: number
+  rows: number
+  title?: string
+  cwd?: string
+  shell?: 'pwsh' | 'bash' | 'cmd'
+  /** DSH conversation session id (workspace resolution). */
+  sessionId?: string
+  env?: Record<string, string>
+}
+
+/** `POST /create` — a new user-owned interactive terminal. */
+export async function createSession(options: CreateSessionOptions): Promise<SessionInfo> {
+  const payload = await postJson('/create', {
+    cols: Math.max(2, Math.round(options.cols)),
+    rows: Math.max(1, Math.round(options.rows)),
+    ...(options.title !== undefined ? { title: options.title } : {}),
+    ...(options.cwd !== undefined ? { cwd: options.cwd } : {}),
+    ...(options.shell !== undefined ? { shell: options.shell } : {}),
+    ...(options.sessionId !== undefined ? { sessionId: options.sessionId } : {}),
+    ...(options.env !== undefined ? { env: options.env } : {}),
+  })
+  const info = readSessionPayload(payload)
+  if (!info) throw new ApiError('create returned an invalid session payload', 500)
+  return info
+}
+
+/** `POST /input` — raw keyboard text for one session. */
+export async function sendInput(
+  id: string,
+  data: string,
+  inputClientId: string = getClientId(),
+): Promise<void> {
+  if (data === '') return
+  await postJson('/input', { id, data, clientId: inputClientId })
+}
+
+/** `POST /resize` — PTY + mirror dimensions. */
 export async function resizeSession(id: string, cols: number, rows: number): Promise<void> {
   await postJson('/resize', {
     id,
@@ -358,8 +288,80 @@ export async function resizeSession(id: string, cols: number, rows: number): Pro
   })
 }
 
-export async function closeSession(id: string): Promise<void> {
-  await postJson('/close', { id })
+/** `POST /close` — terminate the session (the host writes a history entry). */
+export async function closeSession(id: string): Promise<string | null> {
+  const payload = await postJson('/close', { id })
+  const record = asRecord(payload)
+  return record ? readString(record.historyId) ?? null : null
+}
+
+/** `POST /keep` — cancel auto-close and pin the terminal. */
+export async function keepSession(id: string): Promise<SessionInfo | null> {
+  const payload = await postJson('/keep', { id })
+  return readSessionPayload(payload)
+}
+
+/** `POST /auto-close` — pause/resume the host-side countdown. */
+export async function setAutoClosePaused(
+  id: string,
+  paused: boolean,
+  reason?: string,
+): Promise<SessionInfo | null> {
+  const payload = await postJson('/auto-close', {
+    id,
+    action: paused ? 'pause' : 'resume',
+    ...(reason !== undefined ? { reason } : {}),
+  })
+  return readSessionPayload(payload)
+}
+
+/** `POST /rename` — change the tab title. */
+export async function renameSession(id: string, title: string): Promise<SessionInfo | null> {
+  const payload = await postJson('/rename', { id, title })
+  return readSessionPayload(payload)
+}
+
+/** `POST /take-control` — take the input lease from another page. */
+export async function takeControl(
+  id: string,
+  inputClientId: string = getClientId(),
+): Promise<string | null> {
+  const payload = await postJson('/take-control', { id, clientId: inputClientId })
+  const record = asRecord(payload)
+  return record ? readString(record.writerClientId) ?? null : null
+}
+
+/** `POST /signal` — SIGINT (ETX) / SIGTERM / SIGKILL / SIGHUP. */
+export async function signalSession(
+  id: string,
+  signal: 'SIGINT' | 'SIGTERM' | 'SIGKILL' | 'SIGHUP',
+): Promise<string> {
+  const payload = await postJson('/signal', { id, signal })
+  const record = asRecord(payload)
+  return (record && readString(record.delivered)) ?? signal
+}
+
+/**
+ * `POST /capture` — round-trip a PNG data URL rendered by the browser.
+ * `size` is optional; the host also derives it from the PNG header.
+ */
+export async function postCapture(
+  id: string,
+  requestId: string,
+  dataUrl: string,
+  size?: { width: number; height: number },
+): Promise<void> {
+  await postJson('/capture', {
+    id,
+    requestId,
+    dataUrl,
+    ...(size !== undefined ? { width: size.width, height: size.height } : {}),
+  })
+}
+
+/** Download URL for `GET /export?id=&format=` (text/ansi attachment). */
+export function exportUrl(id: string, format: 'text' | 'ansi' = 'text'): string {
+  return `${API_PREFIX}/export?id=${encodeURIComponent(id)}&format=${format}`
 }
 
 /* ------------------------------------------------------------------ */
@@ -393,33 +395,90 @@ function listenSse(
 export interface SessionStreamHandlers {
   onOpen?: () => void
   onError?: () => void
-  onSnapshot: (frame: SnapshotFrame) => void
-  onOutput: (frame: OutputFrame) => void
-  onState: (patch: SessionInfoPatch) => void
-  onExit: (frame: ExitFrame) => void
+  onSnapshot?: (frame: SnapshotFrame) => void
+  onOutput?: (frame: OutputFrame) => void
+  onState?: (patch: SessionInfoPatch) => void
+  onExit?: (frame: ExitFrame) => void
+  /** The agent asked this client to render + upload a PNG of the screen. */
+  onCaptureRequest?: (frame: CaptureRequestFrame) => void
 }
 
-/** Subscribe to `GET /events?id=` for one session. Returns a disposer. */
+/**
+ * `GET /events?id=` subscription options. Both shapes are accepted:
+ *  - flat (`{clientId, fromSeq, onSnapshot, ...}`) as written in the contract,
+ *  - nested (`{clientId, fromSeq, handlers: {...}}`) as TerminalView uses.
+ */
+export interface OpenSessionStreamOptions extends SessionStreamHandlers {
+  /** Stable page id; the host attaches it as a follower for input leasing. */
+  clientId?: string
+  /** First sequence to replay after the snapshot (reconnect optimization). */
+  fromSeq?: number
+  /** Grouped form; takes precedence over the flat callbacks. */
+  handlers?: SessionStreamHandlers
+}
+
+/**
+ * Subscribe to `GET /events?id=` for one session. Returns a disposer.
+ *
+ * `clientId` is always sent so the host can track followers; a `fromSeq` is
+ * only forwarded when the caller has one (the host then replays the missed
+ * output frames after the snapshot).
+ */
 export function openSessionStream(
   id: string,
-  handlers: SessionStreamHandlers,
+  options: OpenSessionStreamOptions,
 ): () => void {
-  const source = new EventSource(`${API_PREFIX}/events?id=${encodeURIComponent(id)}`)
+  const handlers: SessionStreamHandlers = options.handlers ?? {
+    onOpen: options.onOpen,
+    onError: options.onError,
+    onSnapshot: options.onSnapshot,
+    onOutput: options.onOutput,
+    onState: options.onState,
+    onExit: options.onExit,
+    onCaptureRequest: options.onCaptureRequest,
+  }
+  const params = new URLSearchParams({ id })
+  params.set('clientId', options.clientId ?? getClientId())
+  if (
+    typeof options.fromSeq === 'number' &&
+    Number.isFinite(options.fromSeq) &&
+    options.fromSeq >= 0
+  ) {
+    params.set('fromSeq', String(Math.floor(options.fromSeq)))
+  }
+  const source = new EventSource(`${API_PREFIX}/events?${params.toString()}`)
   listenSse(source, 'snapshot', (payload) => {
     const frame = parseSnapshot(payload)
-    if (frame) handlers.onSnapshot(frame)
+    if (frame) handlers.onSnapshot?.(frame)
   })
   listenSse(source, 'output', (payload) => {
     const frame = parseOutput(payload)
-    if (frame) handlers.onOutput(frame)
+    if (frame) handlers.onOutput?.(frame)
+  })
+  // The host may batch the replay as one `replay` frame; unwrap it as outputs.
+  listenSse(source, 'replay', (payload) => {
+    const record = asRecord(payload)
+    const raw = record && Array.isArray(record.frames)
+      ? record.frames
+      : Array.isArray(payload)
+        ? payload
+        : []
+    for (const item of raw) {
+      const frame = parseOutput(item)
+      if (frame) handlers.onOutput?.(frame)
+    }
   })
   listenSse(source, 'state', (payload) => {
     const patch = parseSessionPatch(payload)
-    if (patch) handlers.onState(patch)
+    if (patch) handlers.onState?.(patch)
   })
   listenSse(source, 'exit', (payload) => {
     const frame = parseExit(payload)
-    if (frame) handlers.onExit(frame)
+    if (frame) handlers.onExit?.(frame)
+  })
+  listenSse(source, 'capture-request', (payload) => {
+    const frame = parseCaptureRequest(payload)
+    if (frame) handlers.onCaptureRequest?.(frame)
   })
   source.addEventListener('open', () => {
     try {
@@ -442,8 +501,10 @@ export interface SessionsStreamHandlers {
   onOpen?: () => void
   onError?: () => void
   onSessions: (payload: SessionInfo[] | SessionInfo) => void
-  /** Optional: global `notice` events (auto-closed terminals). */
-  onNotice?: (notice: TerminalNotice) => void
+  /** Optional: global `notice` events (auto-close/finished/port/capture). */
+  onNotice?: (notice: Notice) => void
+  /** Optional: `capture-request` frames sent over the global stream. */
+  onCaptureRequest?: (frame: CaptureRequestFrame) => void
 }
 
 interface SessionsFeed {
@@ -455,9 +516,9 @@ interface SessionsFeed {
 
 /**
  * One shared global `/events` connection for the whole page. Every panel
- * instance, plus the auto-open watcher, subscribe to this feed: opening one
- * EventSource per panel would multiply long-lived connections (and can hit the
- * browser's per-origin connection cap on HTTP/1.1).
+ * instance, the global notice watcher and the auto-open watcher subscribe to
+ * this feed: opening one EventSource per panel would multiply long-lived
+ * connections (and can hit the browser's per-origin connection cap on HTTP/1.1).
  */
 let sessionsFeed: SessionsFeed | null = null
 
@@ -475,6 +536,13 @@ function fanoutSessions(
   }
 }
 
+function fanoutCaptureRequest(
+  subscribers: Set<SessionsStreamHandlers>,
+  frame: CaptureRequestFrame,
+): void {
+  fanoutSessions(subscribers, (subscriber) => subscriber.onCaptureRequest?.(frame))
+}
+
 /** Subscribe to the shared global `GET /events` session feed. Returns a disposer. */
 export function openSessionsStream(handlers: SessionsStreamHandlers): () => void {
   if (sessionsFeed === null) {
@@ -487,9 +555,20 @@ export function openSessionsStream(handlers: SessionsStreamHandlers): () => void
       fanoutSessions(subscribers, (subscriber) => subscriber.onSessions(parsed))
     })
     listenSse(source, 'notice', (payload) => {
-      const notice = parseTerminalNotice(payload)
+      const notice = parseNotice(payload)
       if (!notice) return
+      if (notice.type === 'capture-request') {
+        fanoutCaptureRequest(subscribers, {
+          terminalId: notice.terminalId,
+          requestId: notice.requestId,
+        })
+        return
+      }
       fanoutSessions(subscribers, (subscriber) => subscriber.onNotice?.(notice))
+    })
+    listenSse(source, 'capture-request', (payload) => {
+      const frame = parseCaptureRequest(payload)
+      if (frame) fanoutCaptureRequest(subscribers, frame)
     })
     source.addEventListener('open', () => {
       feed.opened = true
@@ -526,3 +605,5 @@ export function openSessionsStream(handlers: SessionsStreamHandlers): () => void
     }
   }
 }
+
+export type { ConfigInfo, HistoryEntry, Notice }

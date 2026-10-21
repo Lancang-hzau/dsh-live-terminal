@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { DEFAULT_CONFIG, resolveConfig } from '../lib/index.js'
 import { normalizeDimensions, TerminalRegistry } from '../lib/host/registry.js'
@@ -86,7 +88,9 @@ function processRegistry(subprocess, configOverrides = {}) {
     subprocess,
     workingDirectory: { defaultDirectory: 'C:\\host-start-dir' },
     sessions: undefined,
-    config: resolveConfig({ ...configOverrides }),
+    // Keep tests off the real home directory history file; history behaviour is
+    // covered explicitly with temp files in tests/history.test.mjs.
+    config: resolveConfig({ historyPath: '', historyPersist: false, ...configOverrides }),
   })
 }
 
@@ -137,9 +141,39 @@ test('normalizeDimensions clamps invalid values to defaults', () => {
 })
 
 test('resolveConfig applies defaults', () => {
-  assert.deepEqual(resolveConfig(undefined), { ...DEFAULT_CONFIG })
-  assert.deepEqual(resolveConfig(null), { ...DEFAULT_CONFIG })
-  assert.deepEqual(resolveConfig('nonsense'), { ...DEFAULT_CONFIG })
+  // `historyPath` is materialised to the per-user history file by default.
+  const expectedDefaults = {
+    ...DEFAULT_CONFIG,
+    historyPath: join(homedir(), '.dsh', 'dsh-live-terminal', 'history.json'),
+  }
+  assert.deepEqual(resolveConfig(undefined), expectedDefaults)
+  assert.deepEqual(resolveConfig(null), expectedDefaults)
+  assert.deepEqual(resolveConfig('nonsense'), expectedDefaults)
+  // Empty string explicitly disables the history file; blank whitespace is
+  // treated as unset and falls back to the default path.
+  assert.equal(resolveConfig({ historyPath: '' }).historyPath, undefined)
+  assert.equal(resolveConfig({ historyPath: '   ' }).historyPath, expectedDefaults.historyPath)
+})
+
+test('resolveConfig exposes the 1.2.1 contract defaults', () => {
+  const config = resolveConfig(undefined)
+  assert.equal(config.interceptShellTools, true)
+  assert.equal(config.scrollback, 2000)
+  assert.equal(config.maxOutputBytes, 262144)
+  assert.equal(config.maxSessions, 16)
+  assert.equal(config.perSessionMaxSessions, 8)
+  assert.equal(config.commandTimeoutMs, 180000)
+  assert.equal(config.retainExited, 10)
+  assert.equal(config.historySize, 20)
+  assert.equal(config.historyPersist, true)
+  assert.equal(config.interceptMinVisibleMs, 1500)
+  assert.equal(config.autoCloseCommandDelayMs, 8000)
+  assert.equal(config.autoCloseFailedDelayMs, 30000)
+  assert.equal(config.autoCloseToolTerminals, true)
+  assert.equal(config.autoCloseNotice, 'all')
+  assert.equal(config.requireSandbox, false)
+  assert.equal(config.allowUnconfined, true)
+  assert.equal(config.portDetection, true)
 })
 
 test('resolveConfig clamps numeric bounds and parses flags', () => {
@@ -172,13 +206,15 @@ test('resolveConfig clamps numeric bounds and parses flags', () => {
 })
 
 test('resolveConfig defaults and validates the auto-close notice mode', () => {
-  assert.equal(resolveConfig(undefined).interceptMinVisibleMs, 4500)
-  assert.equal(resolveConfig(undefined).autoCloseCommandDelayMs, 5000)
-  assert.equal(resolveConfig(undefined).autoCloseFailedDelayMs, 2000)
+  assert.equal(resolveConfig(undefined).interceptMinVisibleMs, 1500)
+  assert.equal(resolveConfig(undefined).autoCloseCommandDelayMs, 8000)
+  assert.equal(resolveConfig(undefined).autoCloseFailedDelayMs, 30000)
   assert.equal(resolveConfig(undefined).autoCloseToolTerminals, true)
-  assert.equal(resolveConfig(undefined).autoCloseNotice, 'failed')
+  assert.equal(resolveConfig(undefined).autoCloseNotice, 'all')
+  assert.equal(resolveConfig({ autoCloseNotice: 'failed' }).autoCloseNotice, 'failed')
   assert.equal(resolveConfig({ autoCloseNotice: 'none' }).autoCloseNotice, 'none')
-  assert.equal(resolveConfig({ autoCloseNotice: 'weird' }).autoCloseNotice, 'failed')
+  assert.equal(resolveConfig({ autoCloseNotice: 'weird' }).autoCloseNotice, 'all')
+  assert.equal(resolveConfig({ autoCloseNotice: 'weird' }).autoCloseNotice, resolveConfig(undefined).autoCloseNotice)
 })
 
 /**
@@ -205,7 +241,7 @@ function fakeRegistry(options = {}) {
     },
     getSessionStore: () => store,
     getSessionQuery: () => options.query,
-    config: resolveConfig(undefined),
+    config: resolveConfig({ historyPath: '', historyPersist: false }),
   })
 }
 
@@ -273,7 +309,7 @@ test('resolveSessionCwd resolves the store lazily at call time', async () => {
     subprocess: {},
     workingDirectory: { get: () => 'C:\\late\\dir' },
     getSessionStore: () => provided,
-    config: resolveConfig(undefined),
+    config: resolveConfig({ historyPath: '', historyPersist: false }),
   })
   assert.equal(await registry.resolveSessionCwd('late-session'), undefined)
   provided = { get: (id) => (id === 'late-session' ? { id } : undefined) }
@@ -293,7 +329,7 @@ test('resolveSessionCwd tolerates missing session services', async () => {
     workingDirectory: undefined,
     getSessionStore: () => undefined,
     getSessionQuery: () => undefined,
-    config: resolveConfig(undefined),
+    config: resolveConfig({ historyPath: '', historyPersist: false }),
   })
   assert.equal(await registry.resolveSessionCwd('live-session'), undefined)
 })
@@ -629,7 +665,7 @@ test('capacity pressure during agent-terminal startup keeps the starting default
   }
 })
 
-test('a fast intercepted command stays off-screen and produces no events', async () => {
+test('a fast intercepted command stays off-screen and only reports a success notice', async () => {
   const subprocess = fakeProcessSubprocess()
   const registry = processRegistry(subprocess, { interceptMinVisibleMs: 10_000 })
   const agent = { id: 'agent-1', session: { id: 'session-1' } }
@@ -646,7 +682,18 @@ test('a fast intercepted command stays off-screen and produces no events', async
     subprocess.spawned[0].handle.finish({ exitCode: 0, signal: null })
     await waitFor(() => registry.lookup(session.id) === undefined)
     assert.equal(registry.size, 0)
-    assert.deepEqual(events, [], 'a fast hidden command leaves no tab and no events behind')
+    assert.equal(events.filter((event) => event.name === 'sessions').length, 0, 'a fast hidden command leaves no tab behind')
+    const notices = events.filter((event) => event.name === 'notice')
+    assert.equal(notices.length, 1, 'autoCloseNotice=all reports the hidden success once')
+    const notice = notices[0].data
+    assert.equal(notice.type, 'auto-close')
+    assert.equal(notice.reason, 'succeeded')
+    assert.equal(notice.terminalId, session.id)
+    assert.equal(notice.historyId, session.id)
+    assert.equal(typeof notice.durationMs, 'number')
+    const history = registry.historyList(10)
+    assert.equal(history.length, 1, 'the closed hidden command still enters history')
+    assert.equal(history[0].id, session.id)
   } finally {
     unsubscribe()
     await registry.dispose()
@@ -660,7 +707,9 @@ test('an intercepted command that runs past interceptMinVisibleMs appears as a t
   const { events, unsubscribe } = captureEvents(registry)
   try {
     const session = await registry.createCommandSession({ command: 'Start-Sleep 1', origin: 'intercept', agent, agentId: 'agent-1' })
-    assert.deepEqual(registry.list(), [])
+    assert.deepEqual(registry.list(), [], 'the session stays hidden until the shell produces output')
+    // Visibility timing starts on the first output frame, not on spawn.
+    subprocess.spawned[0].handle.push('working...\r\n')
     await waitFor(() => registry.list().some((info) => info.id === session.id))
     assert.equal(registry.resolveRecentForAgent(agent)?.id, session.id)
     assert.ok(
@@ -689,22 +738,22 @@ test('a hidden fast failure emits a notice but never a tab', async () => {
     await waitFor(() => registry.lookup(session.id) === undefined)
     assert.equal(events.filter((event) => event.name === 'sessions').length, 0, 'no tab may appear')
     const notice = events.find((event) => event.name === 'notice').data
-    assert.deepEqual(notice, {
-      type: 'auto-close',
-      reason: 'failed',
-      terminalId: session.id,
-      title: session.title,
-      exitCode: 2,
-      signal: null,
-      excerpt: 'boom failure',
-    })
+    assert.equal(notice.type, 'auto-close')
+    assert.equal(notice.reason, 'failed')
+    assert.equal(notice.terminalId, session.id)
+    assert.equal(notice.historyId, session.id)
+    assert.equal(notice.title, session.title)
+    assert.equal(notice.exitCode, 2)
+    assert.equal(notice.signal, null)
+    assert.equal(notice.excerpt, 'boom failure')
+    assert.equal(typeof notice.durationMs, 'number')
   } finally {
     unsubscribe()
     await registry.dispose()
   }
 })
 
-test('a successful command terminal auto-closes after autoCloseCommandDelayMs without a notice', async () => {
+test('a successful command terminal auto-closes after autoCloseCommandDelayMs and notifies (autoCloseNotice=all)', async () => {
   const subprocess = fakeProcessSubprocess()
   const registry = processRegistry(subprocess, { autoCloseCommandDelayMs: 25, autoCloseFailedDelayMs: 25 })
   const { events, unsubscribe } = captureEvents(registry)
@@ -713,10 +762,163 @@ test('a successful command terminal auto-closes after autoCloseCommandDelayMs wi
     assert.ok(registry.list().some((info) => info.id === session.id), 'tool command terminal is visible immediately')
     subprocess.spawned[0].handle.finish({ exitCode: 0, signal: null })
     await waitFor(() => session.state === 'exited')
+    await waitFor(() => events.some((event) => event.name === 'notice'))
+    const notice = events.find((event) => event.name === 'notice').data
+    assert.equal(notice.type, 'auto-close')
+    assert.equal(notice.reason, 'succeeded')
+    assert.equal(notice.terminalId, session.id)
+    assert.equal(notice.historyId, session.id)
+    assert.equal(notice.exitCode, 0)
+    assert.equal(typeof notice.durationMs, 'number')
+    await waitFor(() => registry.lookup(session.id) === undefined)
+  } finally {
+    unsubscribe()
+    await registry.dispose()
+  }
+})
+
+test('autoCloseNotice=none suppresses the successful auto-close notice', async () => {
+  const subprocess = fakeProcessSubprocess()
+  const registry = processRegistry(subprocess, {
+    autoCloseCommandDelayMs: 25,
+    autoCloseFailedDelayMs: 25,
+    autoCloseNotice: 'none',
+  })
+  const { events, unsubscribe } = captureEvents(registry)
+  try {
+    const session = await registry.createCommandSession({ command: 'Write-Output ok', origin: 'tool' })
+    subprocess.spawned[0].handle.finish({ exitCode: 0, signal: null })
     await waitFor(() => registry.lookup(session.id) === undefined)
     assert.equal(events.filter((event) => event.name === 'notice').length, 0)
   } finally {
     unsubscribe()
+    await registry.dispose()
+  }
+})
+
+test('closed command terminals are archived in the bounded history', async () => {
+  const subprocess = fakeProcessSubprocess()
+  const registry = processRegistry(subprocess)
+  try {
+    const session = await registry.createCommandSession({
+      command: 'Write-Output build',
+      origin: 'tool',
+      agentId: 'agent-1',
+      sessionId: 'session-1',
+      cwd: 'C:\\work',
+      title: 'build',
+    })
+    subprocess.spawned[0].handle.push('line one\r\nline two\r\n')
+    subprocess.spawned[0].handle.finish({ exitCode: 0, signal: null })
+    await waitFor(() => session.state === 'exited')
+    const entries = registry.historyList(5)
+    assert.equal(entries.length, 1)
+    const entry = entries[0]
+    assert.equal(entry.id, session.id)
+    assert.equal(entry.kind, 'command')
+    assert.equal(entry.command, 'Write-Output build')
+    assert.equal(entry.cwd, 'C:\\work')
+    assert.equal(entry.exitCode, 0)
+    assert.equal(entry.signal, null)
+    assert.equal(entry.reason, 'closed')
+    assert.equal(entry.agentId, 'agent-1', 'history entries carry the owning agent for tool visibility')
+    assert.equal(entry.sessionId, 'session-1')
+    assert.equal(entry.owner, 'agent')
+    assert.match(entry.text, /line two/)
+    assert.deepEqual(entry.ports, [])
+    assert.deepEqual(entry.sandbox, { mode: 'danger-full-access', confined: false, required: false })
+    assert.equal(registry.history.get(session.id)?.id, session.id)
+  } finally {
+    await registry.dispose()
+  }
+})
+
+test('pauseAutoClose, resumeAutoClose and keep control the auto-close countdown', async () => {
+  const subprocess = fakeProcessSubprocess()
+  const registry = processRegistry(subprocess, { autoCloseCommandDelayMs: 30, autoCloseFailedDelayMs: 30 })
+  try {
+    const session = await registry.createCommandSession({ command: 'pause-me', origin: 'tool' })
+    subprocess.spawned[0].handle.finish({ exitCode: 0, signal: null })
+    await waitFor(() => session.state === 'exited')
+    await waitFor(() => typeof session.info.autoCloseAt === 'number')
+
+    const paused = registry.pauseAutoClose(session.id)
+    assert.equal(paused.autoClosePaused, true)
+    await sleep(60)
+    assert.equal(registry.lookup(session.id)?.id, session.id, 'a paused terminal must stay open')
+
+    const resumed = registry.resumeAutoClose(session.id)
+    assert.equal(resumed.autoClosePaused, false)
+    assert.equal(typeof resumed.autoCloseAt, 'number', 'resume restarts the countdown')
+    await waitFor(() => registry.lookup(session.id) === undefined)
+
+    const kept = await registry.createCommandSession({ command: 'keep-me', origin: 'tool' })
+    subprocess.spawned[1].handle.finish({ exitCode: 0, signal: null })
+    await waitFor(() => kept.state === 'exited')
+    const pinned = registry.keep(kept.id)
+    assert.equal(pinned.pinned, true)
+    assert.equal(pinned.autoCloseAt, null)
+    await sleep(60)
+    assert.equal(registry.lookup(kept.id)?.id, kept.id, 'a pinned terminal must stay open')
+  } finally {
+    await registry.dispose()
+  }
+})
+
+test('perSessionMaxSessions is enforced per DSH session and reclaims exited commands', async () => {
+  const subprocess = fakeProcessSubprocess()
+  const registry = processRegistry(subprocess, {
+    perSessionMaxSessions: 2,
+    maxSessions: 10,
+    autoCloseCommandDelayMs: -1,
+    autoCloseFailedDelayMs: -1,
+  })
+  try {
+    const agent = { id: 'agent-1', session: { id: 'session-1' } }
+    const first = await registry.createCommandSession({ command: 'one', origin: 'tool', agent, agentId: 'agent-1', sessionId: 'session-1' })
+    subprocess.spawned[0].handle.finish({ exitCode: 0, signal: null })
+    await waitFor(() => first.state === 'exited')
+    const second = await registry.createCommandSession({ command: 'two', origin: 'tool', agent, agentId: 'agent-1', sessionId: 'session-1' })
+    const third = await registry.createCommandSession({ command: 'three', origin: 'tool', agent, agentId: 'agent-1', sessionId: 'session-1' })
+    assert.equal(registry.lookup(first.id), undefined, 'the exited command of the same DSH session is reclaimed first')
+    assert.equal(registry.lookup(second.id)?.id, second.id)
+    assert.equal(registry.lookup(third.id)?.id, third.id)
+    assert.equal(registry.size, 2)
+
+    await assert.rejects(
+      () => registry.createCommandSession({ command: 'four', origin: 'tool', agent, agentId: 'agent-1', sessionId: 'session-1' }),
+      /perSessionMaxSessions/,
+    )
+  } finally {
+    await registry.dispose()
+  }
+})
+
+test('requireSandbox refuses agent terminals but keeps user terminals and reports the sandbox fact', async () => {
+  const subprocess = fakeProcessSubprocess()
+  const registry = new TerminalRegistry({
+    subprocess,
+    workingDirectory: { defaultDirectory: 'C:\\host-start-dir' },
+    resolveSandboxPolicy: () => ({ mode: 'read-only', confined: false, required: true, available: true }),
+    config: resolveConfig({ historyPath: '', historyPersist: false, requireSandbox: true }),
+  })
+  try {
+    const agent = { id: 'agent-1', session: { id: 'session-1' } }
+    await assert.rejects(
+      () => registry.createCommandSession({ command: 'x', agent, agentId: 'agent-1' }),
+      /SANDBOX_REQUIRED/,
+    )
+    await assert.rejects(
+      () => registry.createInteractive({ agent, agentId: 'agent-1', owner: 'agent' }),
+      /SANDBOX_REQUIRED/,
+    )
+    assert.equal(registry.size, 0, 'refused creations must not leave a session behind')
+
+    const user = await registry.createInteractive({ cwd: 'C:\\work', owner: 'user' })
+    assert.equal(user.info.sandbox.mode, 'read-only')
+    assert.equal(user.info.sandbox.confined, false)
+    assert.equal(user.info.sandbox.required, true)
+  } finally {
     await registry.dispose()
   }
 })
@@ -746,7 +948,7 @@ test('a failed command terminal emits a notice before auto-closing', async () =>
   }
 })
 
-test('keepOpen keeps the command terminal alive after exit', async () => {
+test('keepOpen keeps the command terminal alive after exit and emits command-finished', async () => {
   const subprocess = fakeProcessSubprocess()
   const registry = processRegistry(subprocess, { autoCloseCommandDelayMs: 20, autoCloseFailedDelayMs: 20 })
   const { events, unsubscribe } = captureEvents(registry)
@@ -756,7 +958,13 @@ test('keepOpen keeps the command terminal alive after exit', async () => {
     await waitFor(() => session.state === 'exited')
     await sleep(60)
     assert.equal(registry.lookup(session.id)?.id, session.id)
-    assert.equal(events.filter((event) => event.name === 'notice').length, 0)
+    const notices = events.filter((event) => event.name === 'notice')
+    assert.equal(notices.length, 1)
+    assert.equal(notices[0].data.type, 'command-finished')
+    assert.equal(notices[0].data.terminalId, session.id)
+    assert.equal(notices[0].data.keepOpen, true)
+    assert.equal(typeof notices[0].data.durationMs, 'number')
+    assert.equal(notices.some((event) => event.data.type === 'auto-close'), false)
   } finally {
     unsubscribe()
     await registry.dispose()
@@ -887,9 +1095,9 @@ test('a session created before the first SSE subscriber still reports its close'
 
 test('the default visibility threshold keeps typical fast commands off-screen', async () => {
   const subprocess = fakeProcessSubprocess()
-  // Default config: interceptMinVisibleMs is 4500ms (includes the Windows
-  // PowerShell/ConPTY startup overhead), so a command that settles immediately
-  // must never become visible.
+  // Default config: interceptMinVisibleMs is 1500ms measured from the first
+  // output frame (with a 4s spawn-based fallback), so a command that settles
+  // immediately must never become visible.
   const registry = processRegistry(subprocess)
   const { events, unsubscribe } = captureEvents(registry)
   try {

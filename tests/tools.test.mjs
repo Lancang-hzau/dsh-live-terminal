@@ -24,6 +24,13 @@ function sessionInfo(id, kind, overrides = {}) {
     rows: 30,
     state: kind === 'command' ? 'exited' : 'running',
     exitCode: kind === 'command' ? 0 : null,
+    signal: null,
+    startedAt: 1000,
+    endedAt: kind === 'command' ? 1100 : null,
+    durationMs: kind === 'command' ? 100 : null,
+    shellKind: 'pwsh',
+    ports: [],
+    sandbox: { mode: 'danger-full-access', confined: false, required: false },
     createdAt: 1,
     updatedAt: 2,
     ...overrides,
@@ -43,7 +50,7 @@ function sessionInfo(id, kind, overrides = {}) {
  */
 function fakeSession(id, kind, overrides = {}) {
   const info = sessionInfo(id, kind, overrides)
-  const state = { written: [], snapshots: 0, serializeCalls: [], snapshotCalls: [] }
+  const state = { written: [], snapshots: 0, serializeCalls: [], snapshotCalls: [], signals: [] }
   const exit = Promise.withResolvers()
   return {
     id,
@@ -62,14 +69,28 @@ function fakeSession(id, kind, overrides = {}) {
     async write(data) {
       state.written.push(data)
     },
+    async sendSignal(name) {
+      state.signals.push(name)
+      return { delivered: name }
+    },
+    async resize(cols, rows) {
+      this.cols = cols
+      this.rows = rows
+    },
     plainTail(maxBytes) {
       return { text: `recent output (${maxBytes})`, truncated: false }
+    },
+    readLines({ offset = 0, lines = 50 } = {}) {
+      return { text: `lines ${offset}-${lines}`, startLine: offset, endLine: offset + lines, totalLines: 100, truncated: false }
     },
     visibleText() {
       return kind === 'command' ? 'command screen' : 'interactive screen'
     },
     fullText() {
       return kind === 'command' ? 'scrollback\ncommand screen' : 'scrollback\ninteractive screen'
+    },
+    exportText(format = 'text') {
+      return { text: `${format}-export`, bytes: Buffer.byteLength(`${format}-export`, 'utf8'), truncated: false }
     },
     serialize(options) {
       state.serializeCalls.push(options)
@@ -95,17 +116,26 @@ function fakeRegistry(options = {}) {
     [command.id, command],
     [interactive.id, interactive],
   ])
+  if (options.empty === true) sessions.clear()
   for (const extra of options.extra ?? []) sessions.set(extra.id, extra)
-  const calls = { created: [], waited: [], ensured: 0, closed: [] }
+  const historyEntries = options.historyEntries ?? []
+  const calls = { created: [], waited: [], ensured: 0, closed: [], renamed: [], waitedExit: [] }
   return {
     calls,
     command,
     interactive,
+    historyEntries,
     sessions: [...sessions.values()],
+    history: {
+      size: historyEntries.length,
+      get: (id) => historyEntries.find((entry) => entry.id === id),
+    },
+    historyList: (limit = 10) => historyEntries.slice(0, limit),
     list: () => [...sessions.values()].map((session) => session.info),
     lookup: (id) => sessions.get(id),
-    resolveForAgent: () => (options.noDefault === true ? undefined : interactive),
-    resolveRecentForAgent: () => (options.noRecent === true ? undefined : command),
+    resolveForAgent: () => (options.noDefault === true || options.empty === true ? undefined : interactive),
+    resolveRecentForAgent: () => (options.noRecent === true || options.empty === true ? undefined : command),
+    sandboxFor: () => ({ mode: 'danger-full-access', confined: false, required: false }),
     async ensureAgentTerminal() {
       calls.ensured += 1
       return interactive
@@ -130,9 +160,28 @@ function fakeRegistry(options = {}) {
         aborted: result.aborted ?? false,
       }
     },
+    async waitForExit(sessionId, waitOptions) {
+      calls.waitedExit.push({ sessionId, waitOptions })
+      const result = options.waitForExitResult ?? {}
+      return {
+        terminalId: result.terminalId ?? sessionId,
+        state: result.state ?? 'exited',
+        exitCode: Object.hasOwn(result, 'exitCode') ? result.exitCode : 0,
+        signal: Object.hasOwn(result, 'signal') ? result.signal : null,
+        durationMs: result.durationMs ?? 123,
+        timedOut: result.timedOut ?? false,
+        matched: result.matched ?? false,
+        text: result.text ?? 'wait output',
+        truncated: result.truncated ?? false,
+      }
+    },
     async close(id) {
       calls.closed.push(id)
       return true
+    },
+    async setTitle(id, title) {
+      calls.renamed.push({ id, title })
+      return { ...(sessions.get(id)?.info ?? sessionInfo(id, 'interactive', { title })), title }
     },
     resolveCwd: async () => 'C:\\work',
   }
@@ -159,7 +208,19 @@ function setup(registry, configOverrides = {}) {
     },
   }
   const plugin = {
-    config: { interceptShellTools: true, commandTimeoutMs: 180_000, maxOutputBytes: 262_144, ...configOverrides },
+    config: {
+      interceptShellTools: true,
+      commandTimeoutMs: 180_000,
+      maxOutputBytes: 262_144,
+      historyPath: '',
+      historyPersist: false,
+      autoCloseCommandDelayMs: 8000,
+      autoCloseFailedDelayMs: 30000,
+      autoCloseToolTerminals: true,
+      requireSandbox: false,
+      allowUnconfined: true,
+      ...configOverrides,
+    },
     registry,
     logger: {
       infos: [],
@@ -211,16 +272,26 @@ function assertParameterSchema(definition) {
   }
 }
 
-test('registers exactly the seven live_terminal_* tools with JSON Schema parameters', () => {
+test('registers every live_terminal_* tool with JSON Schema parameters', () => {
   const { definitions } = setup(fakeRegistry())
   assert.deepEqual([...definitions.keys()].sort(), [
     'live_terminal_close',
+    'live_terminal_exec',
+    'live_terminal_expect',
+    'live_terminal_export',
+    'live_terminal_history',
     'live_terminal_list',
     'live_terminal_open',
     'live_terminal_read',
+    'live_terminal_rename',
+    'live_terminal_resize',
     'live_terminal_run',
     'live_terminal_screenshot',
+    'live_terminal_search',
     'live_terminal_send',
+    'live_terminal_signal',
+    'live_terminal_status',
+    'live_terminal_wait',
   ])
   for (const definition of definitions.values()) {
     assertParameterSchema(definition)
@@ -241,11 +312,17 @@ test('live_terminal_run creates a dedicated command session and returns its id',
   assert.deepEqual(value, {
     terminalId: 'command-1',
     title: 'Get-ChildItem',
+    cwd: 'C:\\work',
     output: 'command output',
     exitCode: 0,
+    signal: null,
     timedOut: false,
     aborted: false,
     stillRunning: false,
+    durationMs: 100,
+    truncated: false,
+    ports: [],
+    sandbox: { mode: 'danger-full-access', confined: false, required: false },
   })
   assert.equal(registry.calls.created.length, 1)
   assert.equal(registry.calls.created[0].command, 'Get-ChildItem')
@@ -274,11 +351,14 @@ test('live_terminal_run exposes keepOpen and passes it through', async () => {
   assert.ok(text.includes('keepOpen:true') || !text.includes('closes automatically'), 'render must not promise auto-close when keepOpen is set')
 })
 
-test('live_terminal_screenshot documents auto-close and keepOpen', () => {
+test('live_terminal_screenshot documents formats, scrollback and closed-terminal fallback', () => {
   const { definitions } = setup(fakeRegistry())
   const screenshot = definitions.get('live_terminal_screenshot')
-  assert.match(screenshot.description, /close automatically|auto-close/i)
-  assert.match(screenshot.description, /keepOpen:true/)
+  assert.match(screenshot.description, /format:"text"/)
+  assert.match(screenshot.description, /format:"ansi"/)
+  assert.match(screenshot.description, /format:"png"/)
+  assert.match(screenshot.description, /withScrollback:true/)
+  assert.match(screenshot.description, /visible terminal/)
 })
 
 test('live_terminal_run render always exposes the terminalId for screenshot follow-up', async () => {
@@ -303,7 +383,7 @@ test('live_terminal_run with wait:false returns immediately without enforcing th
   assert.equal(value.exitCode, null)
   assert.equal(value.terminalId, 'command-1')
   assert.ok(text.includes('still running'))
-  assert.ok(text.includes('keeps running until it exits or the terminal is closed'))
+  assert.ok(text.includes('live_terminal_wait'))
   assert.ok(text.includes('command-1'))
 
   // The session exit is still observed and logged.
@@ -351,11 +431,17 @@ test('live_terminal_screenshot honours an explicit terminalId', async () => {
   assert.equal(value.text, 'interactive screen')
 })
 
-test('live_terminal_screenshot withScrollback returns scrollback text and ANSI', async () => {
+test('live_terminal_screenshot withScrollback returns scrollback text and format:ansi returns ANSI', async () => {
   const { definitions } = setup(fakeRegistry())
   const { value } = await runTool(definitions, 'live_terminal_screenshot', { withScrollback: true })
   assert.equal(value.text, 'scrollback\ncommand screen')
-  assert.ok(value.ansi.includes('ansi-command'))
+  assert.equal(value.scrollback, 'scrollback\ncommand screen')
+  assert.equal(value.ansi, undefined)
+
+  const ansi = await runTool(definitions, 'live_terminal_screenshot', { format: 'ansi', withScrollback: true })
+  assert.equal(ansi.value.ansi, 'ansi-command')
+  assert.equal(ansi.value.scrollback, 'scrollback\ncommand screen')
+  assert.equal(ansi.value.text, 'command screen', 'format:ansi keeps the visible screen as text')
 })
 
 test('live_terminal_screenshot bounds withScrollback text and ANSI', async () => {
@@ -377,8 +463,9 @@ test('live_terminal_screenshot fails clearly when the agent has no visible termi
 test('live_terminal_send defaults to the interactive terminal and creates it lazily', async () => {
   const registry = fakeRegistry({ noDefault: true })
   const { definitions } = setup(registry)
-  const { value } = await runTool(definitions, 'live_terminal_send', { text: 'hi' })
-  assert.deepEqual(value, { ok: true, terminalId: 'terminal-1' })
+  const { value, text } = await runTool(definitions, 'live_terminal_send', { text: 'hi' })
+  assert.deepEqual(value, { ok: true, terminalId: 'terminal-1', sent: 3, keys: [] })
+  assert.match(text, /sent 2 bytes to terminal terminal-1 \+ Enter/)
   assert.equal(registry.calls.ensured, 1)
   assert.deepEqual(registry.interactive._state.written, ['hi\r'])
 })
@@ -403,9 +490,58 @@ test('live_terminal_read defaults to the interactive terminal without creating o
   assert.equal(value.terminalId, 'terminal-1')
   assert.equal(value.state, 'running')
   assert.equal(value.text, 'recent output (2048)')
+  assert.equal(value.truncated, false)
+  assert.equal(value.signal, null)
+  assert.deepEqual(value.ports, [])
 
-  const none = setup(fakeRegistry({ noDefault: true }))
-  await assert.rejects(() => runTool(none.definitions, 'live_terminal_read', {}), /no default interactive terminal/)
+  // With no interactive terminal, no recent command and no history there is
+  // nothing to read; the error names the next action.
+  const none = setup(fakeRegistry({ empty: true, noDefault: true }))
+  await assert.rejects(() => runTool(none.definitions, 'live_terminal_read', {}), /no visible terminal/)
+})
+
+test('live_terminal_read/status/screenshot fall back to closed-command history', async () => {
+  const entry = {
+    id: 'closed-1',
+    title: 'build',
+    command: 'npm run build',
+    cwd: 'C:\\work',
+    kind: 'command',
+    agentId: 'agent-1',
+    exitCode: 1,
+    signal: null,
+    startedAt: 1000,
+    endedAt: 1500,
+    durationMs: 500,
+    cols: 120,
+    rows: 30,
+    reason: 'auto-close',
+    text: 'build failed output',
+    truncated: false,
+    ports: [],
+    sandbox: { mode: 'danger-full-access', confined: false, required: false },
+  }
+  const registry = fakeRegistry({ historyEntries: [entry] })
+
+  const read = await runTool(setup(registry).definitions, 'live_terminal_read', { terminalId: 'closed-1' })
+  assert.equal(read.value.terminalId, 'closed-1')
+  assert.equal(read.value.state, 'exited')
+  assert.equal(read.value.text, 'build failed output')
+  assert.equal(read.value.exitCode, 1)
+  assert.equal(read.value.durationMs, 500)
+
+  const status = await runTool(setup(registry).definitions, 'live_terminal_status', { terminalId: 'closed-1' })
+  assert.equal(status.value.terminalId, 'closed-1')
+  assert.equal(status.value.running, false)
+  assert.equal(status.value.title, 'build')
+  assert.equal(status.value.cwd, 'C:\\work')
+  assert.equal(status.value.exitCode, 1)
+
+  const shot = await runTool(setup(registry).definitions, 'live_terminal_screenshot', { terminalId: 'closed-1' })
+  assert.equal(shot.value.state, 'exited')
+  assert.equal(shot.value.text, 'build failed output')
+  assert.equal(shot.value.warnings.length, 1)
+  assert.match(shot.value.warnings[0], /history/)
 })
 
 test('live_terminal_read accepts an explicit command terminal id', async () => {
@@ -413,12 +549,15 @@ test('live_terminal_read accepts an explicit command terminal id', async () => {
   const { value } = await runTool(definitions, 'live_terminal_read', { terminalId: 'command-1' })
   assert.equal(value.terminalId, 'command-1')
   assert.equal(value.state, 'exited')
+  assert.equal(value.exitCode, 0)
+  assert.equal(value.durationMs, 100)
 })
 
 test('live_terminal_list lists sessions', async () => {
   const { definitions } = setup(fakeRegistry())
   const { value, text } = await runTool(definitions, 'live_terminal_list', {})
   assert.equal(value.terminals.length, 2)
+  assert.equal(value.historyCount, 0)
   assert.ok(text.includes('command-1'))
 })
 
@@ -434,7 +573,7 @@ test('live_terminal_close closes an existing terminal and rejects unknown ids', 
   const registry = fakeRegistry()
   const { definitions } = setup(registry)
   const closed = await runTool(definitions, 'live_terminal_close', { terminalId: 'command-1' })
-  assert.deepEqual(closed.value, { ok: true })
+  assert.deepEqual(closed.value, { ok: true, historyId: 'command-1' })
   assert.deepEqual(registry.calls.closed, ['command-1'])
   await assert.rejects(() => runTool(definitions, 'live_terminal_close', { terminalId: 'missing' }), /not found/)
 })
@@ -474,7 +613,7 @@ test('live_terminal_send only writes to the agent own terminals', async () => {
     /belongs to another agent/,
   )
   const own = await runTool(definitions, 'live_terminal_send', { terminalId: 'terminal-1', text: 'hi' })
-  assert.deepEqual(own.value, { ok: true, terminalId: 'terminal-1' })
+  assert.deepEqual(own.value, { ok: true, terminalId: 'terminal-1', sent: 3, keys: [] })
 })
 
 test('live_terminal_read allows user terminals and rejects other agents', async () => {
@@ -509,7 +648,181 @@ test('live_terminal_close only closes the agent own terminals', async () => {
     /belongs to another agent/,
   )
   const own = await runTool(definitions, 'live_terminal_close', { terminalId: 'command-1' })
-  assert.deepEqual(own.value, { ok: true })
+  assert.deepEqual(own.value, { ok: true, historyId: 'command-1' })
+})
+
+test('live_terminal_run forwards cwd, shell, env and dimensions', async () => {
+  const registry = fakeRegistry()
+  const { definitions } = setup(registry)
+  const { value } = await runTool(definitions, 'live_terminal_run', {
+    command: 'npm test',
+    description: 'Run tests',
+    cwd: 'C:\\project',
+    shell: 'bash',
+    cols: 100,
+    rows: 40,
+    env: { CI: '1' },
+  })
+  const created = registry.calls.created[0]
+  assert.equal(created.cwd, 'C:\\project')
+  assert.equal(created.shellKindHint, 'bash')
+  assert.equal(created.cols, 100)
+  assert.equal(created.rows, 40)
+  assert.deepEqual(created.env, { CI: '1' })
+  assert.equal(created.title, 'Run tests')
+  assert.equal(value.cwd, 'C:\\work')
+  assert.deepEqual(value.ports, [])
+  assert.equal(value.sandbox.mode, 'danger-full-access')
+})
+
+test('live_terminal_run/open refuse unconfined terminals when requireSandbox is on', async () => {
+  const registry = fakeRegistry()
+  registry.sandboxFor = () => ({ mode: 'workspace-write', confined: false, required: true })
+  const { definitions } = setup(registry, { requireSandbox: true, allowUnconfined: false })
+  await assert.rejects(() => runTool(definitions, 'live_terminal_run', { command: 'x' }), /SANDBOX_REQUIRED/)
+  await assert.rejects(() => runTool(definitions, 'live_terminal_open', {}), /SANDBOX_REQUIRED/)
+  assert.equal(registry.calls.created.length, 0, 'no PTY may be created for a refused call')
+})
+
+test('live_terminal_send supports named keys and rejects unknown key names', async () => {
+  const registry = fakeRegistry()
+  const { definitions } = setup(registry)
+  const { value } = await runTool(definitions, 'live_terminal_send', { text: 'npm test', keys: ['Up', 'Enter'] })
+  assert.deepEqual(value.keys, ['Up', 'Enter'])
+  assert.equal(value.sent, Buffer.byteLength('npm test\u001b[A\r\r', 'utf8'))
+  assert.deepEqual(registry.interactive._state.written, ['npm test\u001b[A\r\r'])
+
+  await assert.rejects(
+    () => runTool(definitions, 'live_terminal_send', { text: 'x', keys: ['NotAKey'] }),
+    /unknown key name/,
+  )
+})
+
+test('live_terminal_wait waits for exit or a pattern without killing the terminal', async () => {
+  const registry = fakeRegistry({
+    waitForExitResult: { state: 'exited', exitCode: 0, durationMs: 456, matched: true, text: 'done output' },
+  })
+  const { definitions } = setup(registry)
+  const { value, text } = await runTool(definitions, 'live_terminal_wait', { terminalId: 'command-1', timeoutMs: 5000 })
+  assert.equal(value.terminalId, 'command-1')
+  assert.equal(value.state, 'exited')
+  assert.equal(value.exitCode, 0)
+  assert.equal(value.durationMs, 456)
+  assert.equal(value.matched, true)
+  assert.equal(value.timedOut, false)
+  assert.equal(value.text, 'done output')
+  assert.match(text, /matched/)
+  assert.equal(registry.calls.waitedExit[0].sessionId, 'command-1')
+  assert.equal(registry.calls.waitedExit[0].waitOptions.timeoutMs, 5000)
+  assert.equal(registry.calls.closed.length, 0, 'waiting must never terminate the process')
+})
+
+test('live_terminal_signal delivers signals to the agent own terminal only', async () => {
+  const registry = ownershipRegistry()
+  const { definitions } = setup(registry)
+  const own = await runTool(definitions, 'live_terminal_signal', { terminalId: 'terminal-1', signal: 'SIGTERM' })
+  assert.deepEqual(own.value, { ok: true, delivered: 'SIGTERM', terminalId: 'terminal-1' })
+  await runTool(definitions, 'live_terminal_signal', { terminalId: 'terminal-1' })
+  assert.deepEqual(registry.interactive._state.signals, ['SIGTERM', 'SIGINT'])
+  await assert.rejects(
+    () => runTool(definitions, 'live_terminal_signal', { terminalId: 'user-1' }),
+    /user-owned and read-only/,
+  )
+})
+
+test('live_terminal_resize resizes a running terminal and rejects an exited one', async () => {
+  const registry = fakeRegistry()
+  const { definitions } = setup(registry)
+  const { value } = await runTool(definitions, 'live_terminal_resize', { terminalId: 'terminal-1', cols: 100.7, rows: 40.2 })
+  assert.deepEqual(value, { ok: true, terminalId: 'terminal-1', cols: 100, rows: 40 })
+  assert.equal(registry.interactive.cols, 100)
+  assert.equal(registry.interactive.rows, 40)
+
+  registry.interactive.state = 'exited'
+  await assert.rejects(
+    () => runTool(definitions, 'live_terminal_resize', { terminalId: 'terminal-1', cols: 80, rows: 24 }),
+    /has exited/,
+  )
+})
+
+test('live_terminal_rename renames the agent own terminal', async () => {
+  const registry = fakeRegistry()
+  const { definitions } = setup(registry)
+  const { value } = await runTool(definitions, 'live_terminal_rename', { terminalId: 'terminal-1', title: ' build ' })
+  assert.equal(value.ok, true)
+  assert.equal(value.info.title, 'build')
+  assert.deepEqual(registry.calls.renamed, [{ id: 'terminal-1', title: 'build' }])
+  await assert.rejects(
+    () => runTool(definitions, 'live_terminal_rename', { terminalId: 'terminal-1', title: '  ' }),
+    /non-empty/,
+  )
+})
+
+test('live_terminal_search finds lines with context and validates the regex', async () => {
+  const { definitions } = setup(fakeRegistry())
+  const { value } = await runTool(definitions, 'live_terminal_search', {
+    terminalId: 'command-1',
+    pattern: 'screen',
+    contextLines: 1,
+  })
+  assert.equal(value.terminalId, 'command-1')
+  assert.equal(value.totalLines, 2)
+  assert.deepEqual(value.matches, [{ line: 2, text: 'command screen', before: ['scrollback'], after: [] }])
+  assert.equal(value.truncated, false)
+
+  await assert.rejects(
+    () => runTool(definitions, 'live_terminal_search', { terminalId: 'command-1', pattern: '(', regex: true }),
+    /invalid regular expression/,
+  )
+})
+
+test('live_terminal_history lists recently closed commands', async () => {
+  const entry = {
+    id: 'closed-1',
+    title: 'build',
+    command: 'npm run build',
+    cwd: 'C:\\work',
+    kind: 'command',
+    agentId: 'agent-1',
+    exitCode: 0,
+    signal: null,
+    startedAt: 1000,
+    endedAt: 1500,
+    durationMs: 500,
+    cols: 120,
+    rows: 30,
+    reason: 'auto-close',
+    text: 'build output',
+    truncated: false,
+    ports: [],
+    sandbox: { mode: 'danger-full-access', confined: false, required: false },
+  }
+  const registry = fakeRegistry({ historyEntries: [entry] })
+  const { value } = await runTool(setup(registry).definitions, 'live_terminal_history', {})
+  assert.equal(value.entries.length, 1)
+  assert.equal(value.entries[0].id, 'closed-1')
+  assert.equal(value.entries[0].reason, 'auto-close')
+})
+
+test('live_terminal_export returns inline text or ANSI output', async () => {
+  const { definitions } = setup(fakeRegistry())
+  const text = await runTool(definitions, 'live_terminal_export', { terminalId: 'command-1' })
+  assert.equal(text.value.terminalId, 'command-1')
+  assert.equal(text.value.text, 'text-export')
+  assert.equal(text.value.path, undefined)
+  assert.ok(text.value.bytes > 0)
+
+  const ansi = await runTool(definitions, 'live_terminal_export', { terminalId: 'command-1', format: 'ansi' })
+  assert.equal(ansi.value.text, 'ansi-export')
+})
+
+test('live_terminal_exec rejects an exited terminal before executing', async () => {
+  const registry = fakeRegistry()
+  registry.interactive.state = 'exited'
+  await assert.rejects(
+    () => runTool(setup(registry).definitions, 'live_terminal_exec', { command: 'pwd' }),
+    /has exited/,
+  )
 })
 
 test('tools fail clearly when the terminal backend is unavailable', async () => {

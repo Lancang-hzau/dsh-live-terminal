@@ -20,13 +20,29 @@ export interface TerminalTheme {
   fontSize: number
 }
 
+/** Cursor color pair that stays readable on top of the terminal background. */
+export interface CursorColors {
+  cursor: string
+  cursorAccent: string
+}
+
 const DARK_FALLBACK_BACKGROUND = '#17191d'
 const LIGHT_FALLBACK_BACKGROUND = '#ffffff'
 const FALLBACK_FOREGROUND = '#e6e6e6'
-const FALLBACK_FONT =
-  'Consolas, "Cascadia Mono", "SFMono-Regular", Menlo, "Courier New", monospace'
 
-const FONT_SIZE = 12
+/**
+ * DSH ships a monospace stack after the user's Settings → terminal font list.
+ * Never hand xterm only the user list: a missing font would fall through to a
+ * proportional browser default.
+ */
+const MONO_STACK = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
+const FALLBACK_FONT = `Consolas, "Cascadia Mono", ${MONO_STACK}`
+
+/** Keep in step with the DSH Settings → terminal font size default (13px). */
+const FONT_SIZE = 13
+
+/** WCAG 1.4.11 non-text contrast for the cursor against its cell. */
+const MIN_CURSOR_CONTRAST = 3
 
 /** Coalesce bursts of theme mutations (CSS-variable writes, class flips). */
 const THEME_DEBOUNCE_MS = 100
@@ -111,6 +127,17 @@ function isTransparent(color: string): boolean {
   )
 }
 
+/**
+ * Append the built-in monospace stack to a user-supplied font list. A user
+ * font that is missing on the machine then degrades to monospace instead of
+ * the browser's proportional default.
+ */
+export function appendMonoStack(fontFamily: string): string {
+  const trimmed = fontFamily.trim().replace(/,\s*$/u, '')
+  if (trimmed === '') return MONO_STACK
+  return `${trimmed}, ${MONO_STACK}`
+}
+
 /* ------------------------------------------------------------------ */
 /* Color math                                                          */
 /* ------------------------------------------------------------------ */
@@ -180,6 +207,34 @@ function relativeLuminance(color: string): number {
   return 0.2126 * (channels[0] ?? 0) + 0.7152 * (channels[1] ?? 0) + 0.0722 * (channels[2] ?? 0)
 }
 
+/** WCAG contrast ratio between two opaque colors (1–21). */
+export function contrastRatio(foreground: string, background: string): number {
+  const lighter = Math.max(relativeLuminance(foreground), relativeLuminance(background))
+  const darker = Math.min(relativeLuminance(foreground), relativeLuminance(background))
+  return (lighter + 0.05) / (darker + 0.05)
+}
+
+/** Black or white, whichever is more readable on top of `color`. */
+function readableOn(color: string): string {
+  return contrastRatio(color, '#000000') >= contrastRatio(color, '#ffffff')
+    ? '#000000'
+    : '#ffffff'
+}
+
+/**
+ * Pick a cursor/accent pair with at least 3:1 against the terminal background.
+ * Prefer the theme foreground; fall back to black/white when a themed
+ * foreground would disappear on the cell background (e.g. light background
+ * with a near-white foreground token).
+ */
+export function pickCursorColors(foreground: string, background: string): CursorColors {
+  if (contrastRatio(foreground, background) >= MIN_CURSOR_CONTRAST) {
+    return { cursor: foreground, cursorAccent: readableOn(foreground) }
+  }
+  const cursor = relativeLuminance(background) > 0.179 ? '#000000' : '#ffffff'
+  return { cursor, cursorAccent: readableOn(cursor) }
+}
+
 function resolveBackground(): string {
   // The sidebar sits on the base surface; fall through the layer ladder if the
   // base token is transparent (some themes use layered backgrounds only).
@@ -206,23 +261,26 @@ export function readTerminalTheme(): TerminalTheme {
     '--dsw-alias-label-primary',
     dark ? FALLBACK_FOREGROUND : '#1f2328',
   )
-  const cursor = foreground
+  const cursorColors = pickCursorColors(foreground, background)
   // The Settings → terminal font family/size are projected onto <body> by the
   // shell's theme presenter; fall back to the code font and the default size.
-  const fontFamily =
+  const userFontFamily =
     readBodyFontFamily('--dsh-font-family-terminal') ??
-    readBodyFontFamily('--dsh-font-family-code') ??
-    resolveFontFamily(
-      '--ds-font-family-code',
-      resolveFontFamily('--dsw-font-markdown-code-font-family', FALLBACK_FONT),
-    )
+    readBodyFontFamily('--dsh-font-family-code')
+  const fontFamily =
+    userFontFamily !== undefined
+      ? appendMonoStack(userFontFamily)
+      : resolveFontFamily(
+          '--ds-font-family-code',
+          resolveFontFamily('--dsw-font-markdown-code-font-family', FALLBACK_FONT),
+        )
   const fontSize = readBodyFontSize('--dsh-terminal-font-size', FONT_SIZE)
   return {
     xterm: {
       background,
       foreground,
-      cursor,
-      cursorAccent: background,
+      cursor: cursorColors.cursor,
+      cursorAccent: cursorColors.cursorAccent,
       selectionBackground: withAlpha(foreground, 0.3),
       selectionInactiveBackground: withAlpha(foreground, 0.18),
       scrollbarSliderBackground: withAlpha(foreground, 0.2),
@@ -231,6 +289,26 @@ export function readTerminalTheme(): TerminalTheme {
     },
     fontFamily,
     fontSize,
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Reduced motion                                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Whether the user asked the OS/browser for reduced motion. TerminalView uses
+ * this for `cursorBlink`; styles.ts also disables transitions/animations under
+ * the matching media query. Safe on the server and in tests.
+ */
+export function prefersReducedMotion(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false
+  }
+  try {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  } catch {
+    return false
   }
 }
 
