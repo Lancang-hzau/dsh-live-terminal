@@ -17,8 +17,9 @@
 
 - ✅ **`dsh-live-terminal@1.2.1` 已正式发布到 npmjs（latest）**：<https://www.npmjs.com/package/dsh-live-terminal>。发布 commit `41c703a`，annotated tag `v1.2.1`；npm tarball **22 files / 231.1 kB / shasum `5b5dfe78ddcfd6bc81c2604348bb6a7f50ab3a81`**，包内 `lib/client.js` sha256 **`289CC5B3…6724A`**（与本地构建一致，安装后的 Desktop 包已核对）。
 - ✅ v1.2.1 验证：host 单测 **232/232**、typecheck 0 error、真实 dev host UI 冒烟 **16/16**、真实 agent 本地验收 **16/16**（详见 `docs/test-report.md` §14）。
-- ✅ **Desktop profile 已切到 npm 1.2.1**：`package.json` 依赖 `dsh-live-terminal: 1.2.1`、`node_modules/dsh-live-terminal` 为真实 npm 目录（非 junction），bundle 列表保留 `dsh-live-terminal`。**需完全退出并重启 DeepSeek Harness 才会加载新版本**。
-- ✅ commit/tag 已 push 到 `origin/main`（`31097aa..41c703a`，tag `v1.2.1`）。GitHub Release 资产尚未创建（可选，见 §3）。
+- ✅ **Desktop profile 已切到 npm 1.2.1**：`package.json` 依赖 `dsh-live-terminal: 1.2.1`、`node_modules/dsh-live-terminal` 为真实 npm 目录（非 junction），bundle 列表保留 `dsh-live-terminal`；用户已完全重启 DeepSeek Harness 并确认更新正常。
+- ✅ **GitHub Release `v1.2.1` 已创建**，附 npm tarball 资产：<https://github.com/Lancang-hzau/dsh-live-terminal/releases/tag/v1.2.1>（资产 `dsh-live-terminal-1.2.1.tgz`，231,068 B）。
+- ✅ commit/tag 已 push 到 `origin/main`（`31097aa..117ce3a`，tag `v1.2.1`）。
 - ✅ **`dsh-live-terminal@1.2.0` 已正式发布到 npmjs（历史 latest）**：<https://www.npmjs.com/package/dsh-live-terminal>（2026-10-20；1.1.0、1.0.0 为历史版本）
 - ✅ 发布产物已校验：npm tarball 18 files、shasum `393f2407ea7bd6b287163ada329d89be5fbe1d21`，包内 `lib/client.js` sha256 `71E945EF…C92E33` 与本地构建一致；发布使用 `npm publish --ignore-scripts` 直接取预构建产物（避免发布时重建）
 - ✅ 单测 182/182（v1.2 本地，Node 22/24 双版本验证）、独立 e2e 44 PASS（v1.0 验收）、Desktop 实机验证通过；v1.1/v1.2 验证见 `docs/test-report.md` §12/§13

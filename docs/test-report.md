@@ -354,6 +354,6 @@ node tools/qa-e2e.mjs --slow --host-log=qa/artifacts/devhost-3105-final2.log "<t
 | 安全 | `sandbox` 标注 + 未沙箱横幅 + 首启提示；`requireSandbox`/`allowUnconfined` 回退/拒绝；后台/升权调用仍不接管 |
 | 界面 | 32px chrome、单一 hairline、活动 tab 对比度、12px secondary、24×24 命中区、窄栏 container query、状态栏按需隐藏、banner 替代全覆盖遮罩、焦点管理、深色 token、reduced-motion、全局 Toast 与欢迎卡 |
 | 已知限制 | PNG 需浏览器连接；实时进程不跨 Host 重启（历史保留）；`live_terminal_exec` 仅 pwsh/POSIX；会话仍为 Host 全局（面板默认按当前会话过滤） |
-| 发布状态 | commit `41c703a`、tag `v1.2.1` 已 push 到 origin/main；`npm publish` 已发布 **1.2.1**（latest）；Desktop profile 的 `dsh-live-terminal` 依赖/安装目录已切到 **1.2.1**（真实 npm 目录，client sha256 与本地一致），**需完全退出并重启 DeepSeek Harness 生效**；GitHub Release 尚未创建（可选） |
+| 发布状态 | commit `41c703a`、tag `v1.2.1` 已 push 到 origin/main；`npm publish` 已发布 **1.2.1**（latest）；GitHub Release `v1.2.1` 已创建并上传 npm tarball 资产；Desktop profile 已切到 **1.2.1**（真实 npm 目录，client sha256 与本地一致），用户已重启并确认更新正常 |
 
-- 结论：v1.2.1 的功能、交互、界面升级已完成并通过 host 单测、typecheck、构建、真实 dev host UI 冒烟与真实 agent 本地验收；`npm test` 232/232，UI 冒烟 16/16，agent 验收 16/16。1.2.1 已发布 npm、tag 已推送，Desktop profile 已安装 1.2.1，等待重启生效。
+- 结论：v1.2.1 的功能、交互、界面升级已完成并通过 host 单测、typecheck、构建、真实 dev host UI 冒烟与真实 agent 本地验收；`npm test` 232/232，UI 冒烟 16/16，agent 验收 16/16。1.2.1 已发布 npm、tag/Release 已推送、Desktop profile 已安装并在重启后确认更新正常。
