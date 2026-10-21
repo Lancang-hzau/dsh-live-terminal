@@ -27,7 +27,7 @@
 - ✅ `screenshots.json`、`icon.svg`、`README.md`、CI workflow、catalog 条目样例已就绪
 - ✅ **GitHub 仓库已建好并推送**：<https://github.com/Lancang-hzau/dsh-live-terminal>（public；topics 已加 `dsh-plugin`/`dsh`/`deepseek-harness`/`cordis`/`terminal`/`pty`/`xterm`/`agent-tools`）
 - ✅ **GitHub Release `v1.2.0` 已创建**，附 npm tarball 资产：<https://github.com/Lancang-hzau/dsh-live-terminal/releases/tag/v1.2.0>（历史版本见 <https://github.com/Lancang-hzau/dsh-live-terminal/releases>）
-- ✅ **CI 门禁**：`windows-latest` Node 22/24 全量（含 bundle freshness `git diff --exit-code -- lib/client.js`）+ `ubuntu-latest` Node 24 平台无关子集；v1.2.0 提交 `f20c836` 触发的 run 见 <https://github.com/Lancang-hzau/dsh-live-terminal/actions>
+- ✅ **CI 门禁**：`windows-latest` Node 22/24 全量（含 bundle freshness `git diff --exit-code -- lib/client.js`）+ `ubuntu-latest` Node 24 平台无关子集；v1.2.1 的 `c8cc860` 运行 **success**：<https://github.com/Lancang-hzau/dsh-live-terminal/actions/runs/39561017681>（v1.2.0 运行见 <https://github.com/Lancang-hzau/dsh-live-terminal/actions/runs/39559992974>）。
 - ✅ **Desktop profile 已切换到 npm 安装的 1.2.0**（`node_modules/dsh-live-terminal` 为真实 npm 目录、非 junction；client bundle sha256 `71E945EF…C92E33`）。历史注意：此前 profile 还是 `link:` 时，在 junction 仍存在的情况下执行 `dsh plugin add`（link→npm）会因 `EPERM rename` 失败，且 pnpm 的失败清理会**删除被链接仓库 `.git` 顶层的 HEAD/config/index/logs 等元数据**（已在临时 profile 复现）。`tools/switch-desktop-to-npm.ps1` 已实现**先安全 `rmdir` junction 再安装**，并在临时 profile 验证该顺序安装成功、仓库 `.git` 完全未动；失败会自动恢复本地 link。`-RestoreLink` 可切回本地链接。
 - ✅ README 里引用的截图 raw URL 已验证可访问（200）；仓库无密钥/恢复码等敏感文件
 - ✅ **catalog PR 已提交**：fork `Lancang-hzau/awesome-dsh-plugin` 分支 `add-dsh-live-terminal`（`data/plugins/Lancang-hzau__dsh-live-terminal.yml`）→ **PR #8299** <https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/8299>
