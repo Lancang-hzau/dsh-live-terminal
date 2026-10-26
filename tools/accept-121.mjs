@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Local acceptance for v1.2.1 on a real dev host with a real agent turn.
+ * Local acceptance for the current plugin version on a real dev host with a real agent turn.
  *
  * Covers the paths the deterministic UI smoke cannot:
  *  - agent shell command -> intercepted visible terminal + auto-open;
@@ -98,7 +98,7 @@ try {
   await page.waitForFunction(() => Boolean(globalThis.__DSH_TERMINAL_PANEL__), undefined, { timeout: 30_000 })
   await wait(3000)
   await dismissOverlays(page)
-  record('client 1.2.1 loaded', true)
+  record('client bundle loaded', true)
 
   // New conversation so per-session auto-open has not been consumed yet.
   const newSession = page.getByRole('button', { name: '新建会话', exact: true }).first()
@@ -130,6 +130,23 @@ try {
     }, 20_000)
     record('command output visible in the terminal screen', text)
     await screenshot(page, '02-intercepted')
+
+    // Regression: clicking a finished command tab used to pause auto-close
+    // forever. It must resume once the pointer leaves the terminal/tab.
+    const finishedTab = page.locator('.dshtp-tab', { hasText: 'accept-121' }).first()
+    if (await finishedTab.count()) {
+      await finishedTab.click().catch(() => {})
+      await wait(600)
+      await page.mouse.move(20, 500)
+    }
+    const afterLeave = commandSession
+      ? (await hostSessions(page)).find((session) => session.id === commandSession.id)
+      : undefined
+    record(
+      'clicking a finished tab does not permanently pause auto-close',
+      afterLeave?.autoClosePaused !== true,
+      `paused=${String(afterLeave?.autoClosePaused)}`,
+    )
 
     // Auto-close: success default 8s; the tab/host session should disappear,
     // and the output must remain available in history.

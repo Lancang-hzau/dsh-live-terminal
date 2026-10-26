@@ -382,5 +382,13 @@ v1.2.1 的完整接口契约见 [`impl-1.2.1-contract.md`](./impl-1.2.1-contract
 | 自动关闭 | 倒计时字段 `autoCloseAt`；`POST /keep`、`POST /auto-close {pause|resume}`；失败延迟长于成功；`notice` 增加 `historyId`/`durationMs`/`command-finished`/`port`。 |
 | 工具面 | 新增 `live_terminal_wait/status/signal/resize/read` 分页/`search`/`expect/exec/history/rename/export`；`run/open` 支持 `cwd/shell/cols/rows/env`；`screenshot` 支持 `text/ansi/png`；`send` 支持 `keys`/`paste`；只读工具声明 `isConcurrencySafe`。 |
 | 路由 | 新增 `/config`、`/history`、`/replay`、`/export`、`/keep`、`/auto-close`、`/rename`、`/take-control`、`/signal`、`/capture`；per-session SSE 支持 `clientId`/`fromSeq` 与 `capture-request`；多客户端输入租约（非 writer 返回 409 `READ_ONLY`）。 |
-| 客户端 | 紧凑会话条 + `⋯` 菜单 + 跟随/固定；自动关闭倒计时/保留；历史视图；重命名；选区复制/右键菜单/`Ctrl+F` 搜索；全局通知与首次引导；`ctx.shortcuts` 键盘命令；PNG capture 回传；错误 banner、连接态、焦点管理、对比度与窄栏适配。 |
+| 客户端 | 紧凑会话条 + `⋯` 菜单 + 跟随/固定；自动关闭倒计时/保留；历史视图；重命名；选区复制/右键菜单/`Ctrl+F` 搜索；全局通知与首次引导；面板局部 keymap（不注入 DSH shortcuts 服务）；PNG capture 回传；错误 banner、连接态、焦点管理、对比度与窄栏适配。 |
 | 版本 | `1.2.1`。 |
+
+## 10. 修订记录（v1.2.2）
+
+| 领域 | v1.2.2 调整 |
+|---|---|
+| 自动关闭暂停 | 修复单向暂停：鼠标在终端/页签上移动时临时暂停，移开自动 `resume`；点击/选中页签不再暂停；只有 `/keep` 永久保留；暂停中的页签显示“已暂停”徽标。 |
+| 关闭一致性 | `/close` 非 404 失败时客户端重新同步会话列表；Host `close()` 的 `session.dispose()` 失败不再抛出 500，记录日志后完成关闭。 |
+| 版本 | `1.2.2`。 |

@@ -1,5 +1,5 @@
 /**
- * dsh-live-terminal — browser half (esbuild bundle entry) — 1.2.1.
+ * dsh-live-terminal — browser half (esbuild bundle entry) — 1.2.2.
  *
  * Registers:
  *  - the `zh`/`en` locale namespace,

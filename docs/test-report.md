@@ -357,3 +357,20 @@ node tools/qa-e2e.mjs --slow --host-log=qa/artifacts/devhost-3105-final2.log "<t
 | 发布状态 | commit `41c703a`、tag `v1.2.1` 已 push 到 origin/main；`npm publish` 已发布 **1.2.1**（latest）；GitHub Release `v1.2.1` 已创建并上传 npm tarball 资产；Desktop profile 已切到 **1.2.1**（真实 npm 目录，client sha256 与本地一致），用户已重启并确认更新正常 |
 
 - 结论：v1.2.1 的功能、交互、界面升级已完成并通过 host 单测、typecheck、构建、真实 dev host UI 冒烟与真实 agent 本地验收；`npm test` 232/232，UI 冒烟 16/16，agent 验收 16/16。1.2.1 已发布 npm、tag/Release 已推送、Desktop profile 已安装并在重启后确认更新正常。
+
+---
+
+## 15. v1.2.2 自动关闭“假关闭”修复（2026-10-26）
+
+> 现象：有的终端页签显示“已退出/已关闭”，但一直不自动关闭，需要手动点 ×。根因是 v1.2.1 的“暂停自动关闭”是单向的：鼠标悬停、手动选中页签或终端内滚动/输入都会把 `autoClosePaused` 置为 true，之后没有任何 `resume` 路径；用户点开一个已结束命令查看输出后，它就会永久留在面板里，看起来像“关了但没关”。
+
+| 项 | v1.2.2 结果 |
+|---|---|
+| 修复 1 | 悬停改为“鼠标在终端/页签上移动时临时暂停，移开自动恢复”；不再使用 `onMouseEnter` 永久暂停，避免面板因布局变化在光标下自动打开时误暂停 |
+| 修复 2 | **点击/选中页签不再暂停**自动关闭；只有点“保留”才会永久保留 |
+| 修复 3 | 暂停中的页签显示“已暂停”徽标，不再伪装成普通已退出状态 |
+| 修复 4 | 关闭失败不再“假关闭”：`/close` 非 404 失败时重新同步会话列表；Host 端 terminate 失败不再返回 500，而是记录日志后完成关闭 |
+| 回归验证 | 点击已结束页签 → 指针移开 → 8s 内自动关闭；`accept-121.mjs` 增加该断言，agent 验收 **17/17 PASS** |
+| 测试/构建 | `npm test` **232/232**，typecheck 0 error，`lib/client.js` version 1.2.2；UI 冒烟 **16/16** |
+| 版本 | package/package-lock、host `/ping`、client bundle 统一 **1.2.2** |
+| 发布状态 | 见下方发布记录（npm / GitHub / Desktop 安装） |

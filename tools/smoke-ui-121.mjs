@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * v1.2.1 real-guest smoke check (Playwright + a running dev host).
+ * real-guest smoke check (1.2.x) (Playwright + a running dev host).
  *
  * Usage: node tools/smoke-ui-121.mjs "<url-with-token>"
  *
@@ -61,7 +61,7 @@ page.on('pageerror', (error) => pageErrors.push(String(error)))
 try {
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 })
   await page.waitForFunction(() => Boolean(globalThis.__DSH_TERMINAL_PANEL__), undefined, { timeout: 30_000 })
-  record('client bundle 1.2.1 loaded', true, await page.evaluate(() => JSON.stringify(globalThis.__DSH_TERMINAL_PANEL_CLIENT__)))
+  record('client bundle loaded', true, await page.evaluate(() => JSON.stringify(globalThis.__DSH_TERMINAL_PANEL_CLIENT__)))
   await wait(3000)
   await dismissOverlays(page)
 
@@ -73,7 +73,7 @@ try {
     }
     return { ping: await read('/ping'), config: await read('/config'), history: await read('/history?limit=5') }
   })
-  record('/ping reports 1.2.1', host.ping.status === 200 && host.ping.body?.version === '1.2.1', JSON.stringify(host.ping.body))
+  record('/ping reports 1.2.2', host.ping.status === 200 && host.ping.body?.version === '1.2.2', JSON.stringify(host.ping.body))
   record('/config returns effective values', host.config.status === 200 && host.config.body?.config?.interceptMinVisibleMs === 1500 && host.config.body?.config?.autoCloseCommandDelayMs === 8000, JSON.stringify(host.config.body?.config ?? null))
   record('/history returns entries array', host.history.status === 200 && Array.isArray(host.history.body?.entries), `entries=${host.history.body?.entries?.length}`)
 

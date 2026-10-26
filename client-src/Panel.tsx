@@ -388,7 +388,7 @@ export function Panel(props: PanelProps) {
   const conversationSessionIdRef = useRef<string | undefined>(conversationSessionId)
   conversationSessionIdRef.current = conversationSessionId
   const pauseRequestsRef = useRef<Set<string>>(new Set())
-  const manualSelectionRef = useRef<string | null>(null)
+  const resumeRequestsRef = useRef<Set<string>>(new Set())
   const renameInputRef = useRef<HTMLInputElement | null>(null)
   const dialogRef = useRef<HTMLDivElement | null>(null)
   const tabRefs = useRef(new Map<string, HTMLDivElement>())
@@ -490,10 +490,9 @@ export function Panel(props: PanelProps) {
 
   const selectSession = useCallback(
     (id: string): void => {
-      // A user-initiated selection pauses that terminal's auto-close; the
-      // follow-latest auto-selection must NOT pause, otherwise every agent
-      // command would stay open forever.
-      manualSelectionRef.current = id
+      // Selection is only a view choice: it must not pin or pause the
+      // auto-close countdown. Hovering the terminal/tab pauses temporarily and
+      // resumes on leave; an explicit "keep" is the only permanent opt-out.
       setSelectedId(id)
       setFollow(false)
       storeBoolean(FOLLOW_STORAGE_KEY, false)
@@ -643,14 +642,29 @@ export function Panel(props: PanelProps) {
     [updateInfo, updateSession],
   )
 
-  // Hovering the screen/row pauses via the handlers. A *manual* selection keeps
-  // pausing whenever that session enters its auto-close window (auto-follow
-  // selection intentionally never pauses, or nothing would ever close).
-  useEffect(() => {
-    if (!selectedSession) return
-    if (manualSelectionRef.current !== selectedSession.id) return
-    pauseAutoClose(selectedSession, 'selection')
-  }, [selectedSession, pauseAutoClose])
+  // Hovering the terminal/tab pauses the countdown only while the pointer is
+  // actively moving there; leaving resumes it. A manual selection alone never
+  // pauses, and "保留" is the explicit permanent opt-out. (v1.2.2 fixes the old
+  // one-way pause that left finished tabs looking closed but never closing.)
+
+  const resumeAutoClose = useCallback(
+    (session: SessionInfo | null | undefined, reason: string): void => {
+      if (!session) return
+      if (!session.autoClosePaused || session.pinned || session.autoCloseAt === null) return
+      if (resumeRequestsRef.current.has(session.id)) return
+      resumeRequestsRef.current.add(session.id)
+      updateSession(session.id, { autoClosePaused: false })
+      void setAutoClosePaused(session.id, false, reason)
+        .then((info) => {
+          if (info) updateInfo(info)
+        })
+        .catch(() => {
+          // 404: the host already closed it; the sessions event catches up.
+        })
+        .finally(() => resumeRequestsRef.current.delete(session.id))
+    },
+    [updateInfo, updateSession],
+  )
 
   const keepTerminal = useCallback(
     (session: SessionInfo | null | undefined): void => {
@@ -843,11 +857,14 @@ export function Panel(props: PanelProps) {
         // 404 means it was already closed (auto-close race): that is the intent.
         if (!(error instanceof ApiError && error.status === 404)) {
           showToast(`${t('closeFailed')}: ${errorMessage(error)}`, 'error')
+          // The optimistic removal above was wrong: reconcile with the host so
+          // a terminal that is still alive does not silently vanish from the UI.
+          void loadSessions({ silent: true })
         }
       }
       focusTerminalSurface()
     },
-    [focusTerminalSurface, showToast, t],
+    [focusTerminalSurface, loadSessions, showToast, t],
   )
 
   const closeMany = useCallback(async (ids: string[]): Promise<void> => {
@@ -856,8 +873,17 @@ export function Panel(props: PanelProps) {
     if (selectedIdRef.current !== null && ids.includes(selectedIdRef.current)) {
       setSelectedId(null)
     }
-    await Promise.allSettled(ids.map((id) => closeSession(id)))
-  }, [])
+    const results = await Promise.allSettled(ids.map((id) => closeSession(id)))
+    const failed = results.filter(
+      (result): result is PromiseRejectedResult =>
+        result.status === 'rejected' && !(result.reason instanceof ApiError && result.reason.status === 404),
+    )
+    if (failed.length > 0) {
+      showToast(`${t('closeFailed')}: ${errorMessage(failed[0]?.reason)}`, 'error')
+      // Reconcile optimistic removals with the host.
+      void loadSessions({ silent: true })
+    }
+  }, [loadSessions, showToast, t])
 
   const reconnect = useCallback((): void => {
     setTermError(null)
@@ -1182,6 +1208,11 @@ export function Panel(props: PanelProps) {
         }
       }
     }
+    // A paused countdown is not "closed": make the lingering state explicit so
+    // a finished tab never looks like it is waiting to disappear.
+    if (session.autoCloseAt !== null && session.autoClosePaused && !session.pinned) {
+      return { kind: 'countdown', text: t('paused'), title: t('paused') }
+    }
     if (session.state === 'failed') return { kind: 'error', text: '!' }
     if (session.state === 'running') {
       return { kind: 'running', text: t('runningShort'), title: t('running') }
@@ -1228,7 +1259,8 @@ export function Panel(props: PanelProps) {
           }
         }}
         onKeyDown={tabKeyDown(session)}
-        onMouseEnter={() => pauseAutoClose(session, 'hover')}
+        onMouseMove={() => pauseAutoClose(session, 'hover')}
+        onMouseLeave={() => resumeAutoClose(session, 'hover')}
       >
         <span className="dshtp-dot" data-state={session.state} />
         <span className="dshtp-tab-title">{title}</span>
@@ -1288,7 +1320,6 @@ export function Panel(props: PanelProps) {
         onUserActivity={() => {
           setFollow(false)
           storeBoolean(FOLLOW_STORAGE_KEY, false)
-          pauseAutoClose(selectedSession, 'activity')
         }}
         onSelectionChange={setHasSelection}
         onToast={(text, kind) => showToast(text, kind === 'error' ? 'error' : 'info')}
@@ -2036,9 +2067,11 @@ export function Panel(props: PanelProps) {
         role="tabpanel"
         aria-labelledby={selectedTabId}
         data-dsh-tp-body
-        onMouseEnter={() => {
-          setHovered(true)
-          pauseAutoClose(selectedSession, 'hover')
+        onMouseEnter={() => setHovered(true)}
+        onMouseMove={() => pauseAutoClose(selectedSession, 'hover')}
+        onMouseLeave={() => {
+          setHovered(false)
+          resumeAutoClose(selectedSession, 'hover')
         }}
       >
         {bannerNodes}

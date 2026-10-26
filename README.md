@@ -14,11 +14,20 @@ Visible terminal panel for DeepSeek Harness: stream agent shell commands into an
 
 ![v1.2.1 compact panel with session strip, sandbox disclosure and status bar](https://raw.githubusercontent.com/Lancang-hzau/dsh-live-terminal/HEAD/docs/screenshots/05-v1.2.1-panel.png)
 
+## v1.2.2 修复（2026-10-26）
+
+- **修复“终端显示已退出但一直不关”**：v1.2.1 的悬停/选中暂停是单向的，点开一个已结束的命令页签后自动关闭会永久暂停，页签看起来已关闭却一直留着。1.2.2 改为：
+  - 鼠标在终端/页签上**移动时临时暂停**，移开后自动恢复倒计时并关闭；
+  - **点击/选中页签不再永久暂停**，只有点“保留”才会永久保留；
+  - 暂停中的页签直接显示“已暂停”徽标，不再伪装成普通已退出状态。
+- **关闭失败不再“假关闭”**：`/close` 非 404 失败时重新同步会话列表；Host 端 terminate 失败也不再返回 500，而是记录日志后完成关闭。
+- 版本号/构建/文档统一为 **1.2.2**。
+
 ## v1.2.1 一览
 
 v1.2.1 把评审报告中的功能、交互和界面建议全部落在一个版本里：
 
-- **可读**：命令结束后默认 8s（失败 30s）才自动关闭，关闭前有倒计时；悬停、选中、输入或滚动会暂停关闭；可一键“保留”。关闭的命令进入**最近命令历史**并可回看、复制、搜索、导出。
+- **可读**：命令结束后默认 8s（失败 30s）才自动关闭，关闭前有倒计时；鼠标悬停时临时暂停、移开恢复；点“保留”永久保留。关闭的命令进入**最近命令历史**并可回看、复制、搜索、导出。
 - **可看**：短命令阈值改为从 **shell 就绪后**计时，默认 1.5s；Windows 的 PowerShell 启动开销不再吞掉普通命令；被隐藏的短命令也有提示入口。
 - **可控**：新增 `wait` / `status` / `signal` / `resize` / `read` 分页 / `search` / `expect` / `send.keys` / `exec` / `rename` / `history` / `export` 等工具；`run/open` 支持 `cwd`、`shell`、`cols/rows`、`env`；截图支持 `text`、`ansi`、`png`。
 - **可操作**：会话切换器、重命名、保留、复制选区、右键菜单、`Ctrl+F` 搜索、跟随/固定、未读角标、关闭全部已结束、配置面板、快捷键。
@@ -69,7 +78,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\switch-desktop-to-npm.
 
 1. 正常和 DSH 对话，让它执行命令（例如“运行 npm test”）。命令会自动出现在右侧栏的**终端面板**中，实时输出。
 2. 自己敲命令：右侧栏 → **终端面板** → 会话条上的 **+**。
-3. 命令结束后面板会显示倒计时：**保留** 可让该终端不自动关闭；鼠标悬停、选中或输入也会自动暂停关闭。
+3. 命令结束后面板会显示倒计时：**保留** 可让该终端不自动关闭；鼠标移到终端/页签上会临时暂停，移开恢复。点击页签本身不会永久暂停。
 4. 想回看已关闭的命令：会话条 **⋯ → 历史**（或命令失败通知上的“查看历史”）。
 5. 想复制终端内容：选中文本后 `Ctrl+Shift+C`，或右键 → 复制；整屏复制在 **⋯ → 复制屏幕文本**。
 6. 想搜索输出：`Ctrl+F` 打开搜索条，`Enter` / `Shift+Enter` 跳转。
@@ -106,7 +115,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\switch-desktop-to-npm.
 ## 自动清理与历史（v1.2.1）
 
 - **短命令不上屏**：被接管的内置 `pwsh`/`bash` 前台命令如果运行时间短于 `interceptMinVisibleMs`（默认 **1500ms**），不会产生终端 tab、不触发右侧栏自动弹出、也不发 `sessions` 事件。与旧版不同，计时从 **shell 首个输出帧（就绪）** 开始，因此 Windows 的 PowerShell/ConPTY 启动开销不会吞掉普通命令。失败时仍会发 `notice`。设为 `0` 可全部上屏。
-- **结束后自动关闭**：一次性命令终端在命令结束后自动关闭——成功默认 **8s**，失败/超时/中止默认 **30s**。关闭前有倒计时；悬停、选中、输入或滚动会暂停；点“保留”后永不自动关闭。`live_terminal_run` 创建的终端同样适用（`autoCloseToolTerminals: false` 可关闭该行为），工具参数 `keepOpen: true` 可保留。
+- **结束后自动关闭**：一次性命令终端在命令结束后自动关闭——成功默认 **8s**，失败/超时/中止默认 **30s**。关闭前有倒计时；鼠标移入终端/页签时临时暂停，移开恢复；点“保留”后永不自动关闭。`live_terminal_run` 创建的终端同样适用（`autoCloseToolTerminals: false` 可关闭该行为），工具参数 `keepOpen: true` 可保留。
 - **最近命令历史**：命令终端关闭（自动或手动）后写入历史（默认 20 条，尾部 ≤64KB），可通过面板“历史”或 `live_terminal_history` / `live_terminal_read`（按原 terminalId）回看；`historyPersist: true` 时落盘，Host 重启后仍可查看。
 - **失败通知**：通过全局 SSE（`GET /dsh-terminal-panel/events`）发 `notice` 事件；即使面板未打开也能收到可点击的全局 Toast。`autoCloseNotice` 控制发送范围：`failed` / `all`（默认）/ `none`。
 - **端口**：命令输出中的 loopback 地址会检测并作为可点击链接；`live_terminal_status/read/export` 等结果也带 `ports`。
@@ -192,7 +201,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\switch-desktop-to-npm.
 
 ## v1.2.1 变更
 
-- **自动清理可读化**：自动关闭倒计时；悬停/选中/输入/滚动暂停；一键保留；失败延迟 30s（成功 8s）；关闭命令进入历史。
+- **自动清理可读化**：自动关闭倒计时；鼠标移入临时暂停、移开恢复（1.2.2 修复单向暂停）；一键保留；失败延迟 30s（成功 8s）；关闭命令进入历史。
 - **可见性**：`interceptMinVisibleMs` 默认 1500ms 且从 shell 就绪计时；隐藏命令提示/入口；自动打开按 DSH 会话一次并重试。
 - **历史**：最近关闭命令 LRU + 持久化；面板历史视图；`live_terminal_history`；read/screenshot/status/search 支持按原 terminalId 回退历史。
 - **工具面**：新增 wait/status/signal/resize/read 分页/search/expect/send.keys/exec/rename/history/export；run/open 支持 cwd/shell/cols/rows/env；run 返回 cwd/signal/duration/truncated/ports/sandbox；screenshot 支持 text/ansi/png；只读工具有并发安全声明；工具输出 12KB/6k 字符双上限。
