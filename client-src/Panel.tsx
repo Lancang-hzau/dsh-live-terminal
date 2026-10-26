@@ -1,5 +1,5 @@
 /**
- * Full terminal panel body (1.2.1 compact chrome).
+ * Full terminal panel body (1.3.0 compact chrome + focus mode).
  *
  * The panel is mounted once per right-sidebar tab occurrence. It owns:
  *  - the session list (REST seed + global SSE updates, polling fallback),
@@ -41,6 +41,8 @@ import {
   IconExport,
   IconHistory,
   IconKeyboard,
+  IconMaximize,
+  IconMinimize,
   IconMore,
   IconPause,
   IconPin,
@@ -109,6 +111,10 @@ const NOTICE_TOAST_MS = 6000
 const COUNTDOWN_TICK_MS = 500
 const FOLLOW_STORAGE_KEY = 'dsh-live-terminal.follow'
 const GROUP_STORAGE_KEY = 'dsh-live-terminal.only-this-session'
+const FONT_SIZE_STORAGE_KEY = 'dsh-live-terminal.font-size'
+const DEFAULT_FONT_SIZE = 13
+const MIN_FONT_SIZE = 10
+const MAX_FONT_SIZE = 20
 const SANDBOX_DISMISS_STORAGE_KEY = 'dsh-live-terminal.sandbox-dismissed'
 
 /** The most recently mounted panel wins keyboard commands (multi-panel guard). */
@@ -144,6 +150,25 @@ function readStoredBoolean(key: string, fallback: boolean): boolean {
 function storeBoolean(key: string, value: boolean): void {
   try {
     globalThis.localStorage?.setItem(key, value ? '1' : '0')
+  } catch {
+    // ignore
+  }
+}
+
+function readStoredNumber(key: string, fallback: number): number {
+  try {
+    const value = globalThis.localStorage?.getItem(key)
+    if (value === null || value === undefined || value === '') return fallback
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function storeNumber(key: string, value: number): void {
+  try {
+    globalThis.localStorage?.setItem(key, String(value))
   } catch {
     // ignore
   }
@@ -372,6 +397,8 @@ export function Panel(props: PanelProps) {
   const [sandboxDismissed, setSandboxDismissed] = useState<boolean>(() =>
     readStoredBoolean(SANDBOX_DISMISS_STORAGE_KEY, false),
   )
+  const [expanded, setExpanded] = useState(false)
+  const [fontSize, setFontSize] = useState<number>(() => readStoredNumber(FONT_SIZE_STORAGE_KEY, 0))
 
   const rootRef = useRef<HTMLElement | null>(null)
   const selectedIdRef = useRef<string | null>(null)
@@ -487,6 +514,55 @@ export function Panel(props: PanelProps) {
       })
     })
   }, [])
+
+  const effectiveFontSize = fontSize > 0 ? fontSize : DEFAULT_FONT_SIZE
+
+  const adjustFont = useCallback(
+    (delta: number): void => {
+      setFontSize((previous) => {
+        const current = previous > 0 ? previous : DEFAULT_FONT_SIZE
+        const next = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, current + delta))
+        storeNumber(FONT_SIZE_STORAGE_KEY, next)
+        showToast(t('fontSizeValue', { size: String(next) }), 'info')
+        return next
+      })
+    },
+    [showToast, t],
+  )
+
+  const resetFont = useCallback((): void => {
+    setFontSize(0)
+    storeNumber(FONT_SIZE_STORAGE_KEY, 0)
+    showToast(t('fontSizeReset'), 'info')
+  }, [showToast, t])
+
+  const toggleExpanded = useCallback((): void => {
+    setExpanded((previous) => !previous)
+    // The terminal container changes size; let CSS/layout settle, then refit
+    // so the PTY grid grows with the focus overlay.
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        controllerRef.current?.fit()
+      })
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!expanded) return
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      // Esc belongs to the running TUI/interactive program while the terminal
+      // itself has focus; users leave focus mode with the minimize button, the
+      // backdrop, or Esc after clicking the chrome.
+      const target = event.target
+      if (target instanceof Element && (target.closest('.xterm') !== null || target.closest('.dshtp-search-bar') !== null)) return
+      event.preventDefault()
+      event.stopPropagation()
+      setExpanded(false)
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [expanded])
 
   const selectSession = useCallback(
     (id: string): void => {
@@ -1113,6 +1189,10 @@ export function Panel(props: PanelProps) {
       else if (command === 'prev-tab') cycleTab(-1)
       else if (command === 'follow') toggleFollow()
       else if (command === 'history') void openHistory()
+      else if (command === 'expand') toggleExpanded()
+      else if (command === 'font-smaller') adjustFont(-1)
+      else if (command === 'font-larger') adjustFont(1)
+      else if (command === 'font-reset') resetFont()
       else if (command === 'open' || command === 'focus') focusTerminalSurface()
     }
     window.addEventListener('dsh-live-terminal:command', onCommand)
@@ -1122,11 +1202,14 @@ export function Panel(props: PanelProps) {
       if (activePanel.root === node) activePanel.root = null
     }
   }, [
+    adjustFont,
     closeTerminal,
     createTerminal,
     cycleTab,
     focusTerminalSurface,
     openHistory,
+    resetFont,
+    toggleExpanded,
     toggleFollow,
   ])
 
@@ -1306,6 +1389,7 @@ export function Panel(props: PanelProps) {
         sessionId={selected.id}
         clientId={clientId}
         t={t}
+        fontSize={fontSize > 0 ? fontSize : undefined}
         writable={!readOnly}
         reconnectToken={reconnectToken}
         onConnectionChange={handleConnectionChange}
@@ -1757,6 +1841,44 @@ export function Panel(props: PanelProps) {
         type="button"
         role="menuitem"
         className="dshtp-menu-item"
+        onClick={() => {
+          closeMenu()
+          toggleExpanded()
+        }}
+      >
+        {expanded ? <IconMinimize size={13} /> : <IconMaximize size={13} />}{' '}
+        {expanded ? t('collapse') : t('expand')} <kbd>{primaryLabel()}+Alt+Enter</kbd>
+      </button>
+      <div className="dshtp-menu-sep" role="separator" />
+      <button
+        type="button"
+        role="menuitem"
+        className="dshtp-menu-item"
+        onClick={() => adjustFont(-1)}
+      >
+        {t('fontSmaller')} <span className="dshtp-menu-value">{effectiveFontSize}px</span>
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        className="dshtp-menu-item"
+        onClick={() => adjustFont(1)}
+      >
+        {t('fontLarger')} <span className="dshtp-menu-value">{effectiveFontSize}px</span>
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        className="dshtp-menu-item"
+        disabled={fontSize === 0}
+        onClick={resetFont}
+      >
+        {t('fontReset')}
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        className="dshtp-menu-item"
         disabled={selected === null}
         onClick={() => {
           closeMenu()
@@ -1992,21 +2114,30 @@ export function Panel(props: PanelProps) {
   )
 
   return (
-    <section
-      className="dshtp-root"
-      ref={rootRef}
-      data-dsh-terminal-panel="body"
-      data-dsh-tp-phase={phase}
-      data-dsh-tp-selected={selected?.id ?? ''}
-      onMouseEnter={() => {
-        setHovered(true)
-        activePanel.root = rootRef.current
-      }}
-      onFocusCapture={() => {
-        activePanel.root = rootRef.current
-      }}
-      onMouseLeave={() => setHovered(false)}
-    >
+    <>
+      {expanded ? (
+        <div
+          className="dshtp-focus-backdrop"
+          data-dsh-tp-focus-backdrop
+          onPointerDown={() => setExpanded(false)}
+        />
+      ) : null}
+      <section
+        className="dshtp-root"
+        ref={rootRef}
+        data-dsh-terminal-panel="body"
+        data-dsh-tp-phase={phase}
+        data-dsh-tp-selected={selected?.id ?? ''}
+        data-expanded={expanded ? 'true' : 'false'}
+        onMouseEnter={() => {
+          setHovered(true)
+          activePanel.root = rootRef.current
+        }}
+        onFocusCapture={() => {
+          activePanel.root = rootRef.current
+        }}
+        onMouseLeave={() => setHovered(false)}
+      >
       <div className="dshtp-chrome">
         <button
           type="button"
@@ -2034,6 +2165,21 @@ export function Panel(props: PanelProps) {
         >
           {scopedSessions.map(renderTab)}
         </div>
+        <button
+          type="button"
+          className="dshtp-expand"
+          aria-label={expanded ? t('collapse') : t('expand')}
+          title={
+            expanded
+              ? `${t('collapse')} (Esc)`
+              : `${t('expand')} (${primaryLabel()}+Alt+Enter)`
+          }
+          aria-pressed={expanded}
+          data-dsh-tp-action={expanded ? 'collapse' : 'expand'}
+          onClick={toggleExpanded}
+        >
+          {expanded ? <IconMinimize size={14} /> : <IconMaximize size={14} />}
+        </button>
         <button
           type="button"
           className="dshtp-more"
@@ -2162,5 +2308,6 @@ export function Panel(props: PanelProps) {
 
       {dialogElement}
     </section>
+    </>
   )
 }

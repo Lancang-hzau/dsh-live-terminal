@@ -115,6 +115,12 @@ export const zh: LocaleTable = {
   sizeLabel: '尺寸',
   cwdLabel: '工作目录',
   maximize: '最大化',
+  collapse: '退出最大化',
+  fontSmaller: '字体缩小',
+  fontLarger: '字体放大',
+  fontReset: '字体跟随 DSH 设置',
+  fontSizeValue: '终端字体：{size}px',
+  fontSizeReset: '终端字体已恢复跟随 DSH 设置',
 
   /* ---- 1.2.1 shortcuts / welcome ---------------------------------- */
   shortcuts: '快捷键',
@@ -240,6 +246,12 @@ export const en: LocaleTable = {
   sizeLabel: 'Size',
   cwdLabel: 'Working directory',
   maximize: 'Maximize',
+  collapse: 'Exit maximize',
+  fontSmaller: 'Smaller font',
+  fontLarger: 'Larger font',
+  fontReset: 'Use DSH font setting',
+  fontSizeValue: 'Terminal font: {size}px',
+  fontSizeReset: 'Terminal font follows the DSH setting again',
 
   /* ---- 1.2.1 shortcuts / welcome ---------------------------------- */
   shortcuts: 'Shortcuts',

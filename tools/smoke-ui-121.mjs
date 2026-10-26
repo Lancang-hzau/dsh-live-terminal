@@ -73,7 +73,7 @@ try {
     }
     return { ping: await read('/ping'), config: await read('/config'), history: await read('/history?limit=5') }
   })
-  record('/ping reports 1.2.2', host.ping.status === 200 && host.ping.body?.version === '1.2.2', JSON.stringify(host.ping.body))
+  record('/ping reports 1.3.0', host.ping.status === 200 && host.ping.body?.version === '1.3.0', JSON.stringify(host.ping.body))
   record('/config returns effective values', host.config.status === 200 && host.config.body?.config?.interceptMinVisibleMs === 1500 && host.config.body?.config?.autoCloseCommandDelayMs === 8000, JSON.stringify(host.config.body?.config ?? null))
   record('/history returns entries array', host.history.status === 200 && Array.isArray(host.history.body?.entries), `entries=${host.history.body?.entries?.length}`)
 
@@ -128,6 +128,29 @@ try {
       record('terminal output reaches the host screen', String(text).includes('smoke-121'), String(text).slice(-120))
     }
 
+    // Focus mode: the terminal should grow from the sidebar width to a wide
+    // overlay and collapse back without losing the session.
+    const root = page.locator('.dshtp-root').first()
+    const widthBefore = await root.evaluate((el) => Math.round(el.getBoundingClientRect().width)).catch(() => 0)
+    const expandButton = page.locator('[data-dsh-tp-action="expand"]').first()
+    if (await expandButton.count()) {
+      await expandButton.click().catch(() => {})
+      await wait(900)
+      const expanded = await root.evaluate((el) => ({
+        expanded: el.getAttribute('data-expanded'),
+        width: Math.round(el.getBoundingClientRect().width),
+      }))
+      record('focus mode expands the terminal', expanded.expanded === 'true' && expanded.width > widthBefore * 1.5, `${widthBefore}px -> ${expanded.width}px`)
+      await screenshot(page, '04-focus-mode')
+      const collapse = page.locator('[data-dsh-tp-action="collapse"]').first()
+      if (await collapse.count()) await collapse.click().catch(() => {})
+      await wait(700)
+      const collapsed = await root.evaluate((el) => el.getAttribute('data-expanded')).catch(() => 'unknown')
+      record('focus mode collapses back to the sidebar', collapsed === 'false', `expanded=${collapsed}`)
+    } else {
+      skip('focus mode', 'no expand button')
+    }
+
     // More menu opens, contains history/config, and closes with Escape.
     const more = page.locator('[data-dsh-tp-action="more"]').first()
     if (await more.count()) {
@@ -165,10 +188,10 @@ try {
     if (await more.count()) {
       await more.click().catch(() => {})
       await wait(250)
-      const configItem = page.locator('.dshtp-menu-item', { hasText: /配置|设置|Settings/ }).first()
+      const configItem = page.locator('.dshtp-menu-item', { hasText: /配置|Configuration/ }).first()
       if (await configItem.count()) {
         await configItem.click().catch(() => {})
-        await wait(400)
+        await wait(1200)
         const dialog = page.locator('.dshtp-dialog')
         const dialogText = (await dialog.count()) ? await dialog.first().innerText().catch(() => '') : ''
         record('config dialog shows effective values', /1500|8000|30000/.test(dialogText), dialogText.replace(/\s+/g, ' ').slice(0, 200))

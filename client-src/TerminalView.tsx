@@ -78,6 +78,8 @@ export interface TerminalViewProps {
   onError?: (message: string | null) => void
   /** Reports a failed input POST; the Panel surfaces it as a toast. */
   onInputError?: (message: string) => void
+  /** User-selected terminal font size (px); undefined follows the DSH theme. */
+  fontSize?: number
   /** The user typed while another page owns the input lease. */
   onReadOnlyInput?: () => void
   /** User touched the screen (typing/pointer/wheel): pin the selection. */
@@ -406,6 +408,9 @@ export function TerminalView(props: TerminalViewProps) {
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const callbacksRef = useRef(props)
   callbacksRef.current = props
+  /** Font size override chosen in the panel (undefined = follow DSH theme). */
+  const fontSizeOverrideRef = useRef<number | undefined>(props.fontSize)
+  fontSizeOverrideRef.current = props.fontSize
 
   const suppressResizeRef = useRef(true)
   const postedSizeRef = useRef({ cols: 0, rows: 0 })
@@ -503,7 +508,7 @@ export function TerminalView(props: TerminalViewProps) {
       allowProposedApi: true,
       cursorBlink: !reducedMotion,
       fontFamily: theme.fontFamily,
-      fontSize: theme.fontSize,
+      fontSize: fontSizeOverrideRef.current ?? theme.fontSize,
       lineHeight: 1.15,
       minimumContrastRatio: 4.5,
       scrollback: SCROLLBACK_ROWS,
@@ -714,8 +719,8 @@ export function TerminalView(props: TerminalViewProps) {
         current.options.fontFamily = next.fontFamily
         fontChanged = true
       }
-      if (current.options.fontSize !== next.fontSize) {
-        current.options.fontSize = next.fontSize
+      if (current.options.fontSize !== (fontSizeOverrideRef.current ?? next.fontSize)) {
+        current.options.fontSize = fontSizeOverrideRef.current ?? next.fontSize
         fontChanged = true
       }
       current.options.cursorBlink = !prefersReducedMotion()
@@ -768,6 +773,17 @@ export function TerminalView(props: TerminalViewProps) {
     }
     // The terminal instance is re-created only when the session identity changes.
   }, [sessionId])
+
+  // Font-size preference changes apply live; the fit addon then recomputes the
+  // PTY grid and POSTs the new dimensions.
+  useEffect(() => {
+    const terminal = terminalRef.current
+    if (!terminal) return
+    const target = props.fontSize ?? readTerminalTheme().fontSize
+    if (terminal.options.fontSize === target) return
+    terminal.options.fontSize = target
+    scheduleFitRef.current()
+  }, [props.fontSize])
 
   /* ---------------------------------------------------------------- */
   /* Session stream                                                    */

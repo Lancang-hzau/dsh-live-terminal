@@ -392,3 +392,12 @@ v1.2.1 的完整接口契约见 [`impl-1.2.1-contract.md`](./impl-1.2.1-contract
 | 自动关闭暂停 | 修复单向暂停：鼠标在终端/页签上移动时临时暂停，移开自动 `resume`；点击/选中页签不再暂停；只有 `/keep` 永久保留；暂停中的页签显示“已暂停”徽标。 |
 | 关闭一致性 | `/close` 非 404 失败时客户端重新同步会话列表；Host `close()` 的 `session.dispose()` 失败不再抛出 500，记录日志后完成关闭。 |
 | 版本 | `1.2.2`。 |
+
+## 11. 修订记录（v1.3.0）
+
+| 领域 | v1.3.0 调整 |
+|---|---|
+| 专注模式 | 面板根节点新增 `data-expanded`；放大态使用 `position: fixed; inset: 3vh 3.5vw; z-index: 1300` + `dshtp-focus-backdrop`；ResizeObserver/FitAddon 自动把 PTY 扩到约 185 列；Esc 在 xterm 聚焦时留给 TUI，点背景/最小化按钮退出 |
+| 字体 | `TerminalView` 新增 `fontSize` prop；Panel 维护 10–20px 覆盖值并持久化到 localStorage，0 = 跟随 DSH 主题；主题变化时仍尊重覆盖值 |
+| 快捷键 | 面板局部 keymap 增加 `Ctrl+Alt+Enter`（专注模式）、`Ctrl+Alt+±`（字号）、`Ctrl+Alt+0`（恢复 DSH 字号） |
+| 版本 | `1.3.0`。 |

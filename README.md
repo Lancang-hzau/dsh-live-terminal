@@ -14,6 +14,14 @@ Visible terminal panel for DeepSeek Harness: stream agent shell commands into an
 
 ![v1.2.1 compact panel with session strip, sandbox disclosure and status bar](https://raw.githubusercontent.com/Lancang-hzau/dsh-live-terminal/HEAD/docs/screenshots/05-v1.2.1-panel.png)
 
+![v1.3.0 focus mode: a wide terminal overlay with 185 columns](https://raw.githubusercontent.com/Lancang-hzau/dsh-live-terminal/HEAD/docs/screenshots/06-focus-mode.png)
+
+## v1.3.0 专注模式与窄栏可读性（2026-10-26）
+
+- **专注模式（放大终端）**：侧栏太窄导致命令换行时，点 chrome 上的放大按钮、菜单里的“展开”，或按 `Ctrl+Alt+Enter`，终端会覆盖到约 93% 视口宽（实测 PTY 从 88 列提升到 **185 列**），命令行不再被窄侧栏折断；按 `Esc`（终端未聚焦时）、点背景或再点最小化按钮退出。终端内运行 vim/TUI 时 `Esc` 仍发给程序，不会被抢走。
+- **字体大小可调**：`⋯ → 字体放大/缩小` 或 `Ctrl+Alt+=` / `Ctrl+Alt+-`，10–20px 可调，持久化到 localStorage；`Ctrl+Alt+0` 恢复跟随 DSH 字体设置。
+- **视觉细节**：放大态使用圆角浮层 + 背景模糊 + 阴影，终端区更宽的留白；暂停/倒计时/未读等状态徽标保持紧凑。
+
 ## v1.2.2 修复（2026-10-26）
 
 - **修复“终端显示已退出但一直不关”**：v1.2.1 的悬停/选中暂停是单向的，点开一个已结束的命令页签后自动关闭会永久暂停，页签看起来已关闭却一直留着。1.2.2 改为：
@@ -36,7 +44,7 @@ v1.2.1 把评审报告中的功能、交互和界面建议全部落在一个版�
 
 ## 功能
 
-- **在 DSH 右侧栏拉起真实终端**（xterm.js + PTY，支持 PowerShell / cmd / bash），可直接键盘输入、多标签、resize、刷新重连。
+- **在 DSH 右侧栏拉起真实终端**（xterm.js + PTY，支持 PowerShell / cmd / bash），可直接键盘输入、多标签、resize、刷新重连；窄侧栏可一键进入**专注模式**放大到接近全屏，字体大小可调。
 - **接管默认 shell 命令**：DSH agent 的前台 `pwsh` / `bash` 调用自动在面板里执行，输出实时滚动；agent 开始执行时右侧栏自动弹出（每个 DSH 会话最多一次，失败会重试）。
 - **终端截图**：agent 可用 `live_terminal_screenshot` 拿到当前可见屏幕文本 + 光标/尺寸；`format:"png"` 时由浏览器渲染图片并按附件返回；`format:"ansi"` 返回 ANSI。
 - **完整 agent 控制面**：等待结束/匹配、查询状态、发送信号、调整尺寸、分页读取、搜索、按键序列、在已有 shell 中执行命令、重命名、导出、历史查询。
@@ -88,7 +96,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\switch-desktop-to-npm.
    - `Ctrl+Alt+T` 新建终端
    - `Ctrl+Alt+Shift+W` 关闭当前终端
    - `Ctrl+Alt+F` 切换“跟随最新命令”
-9. 面板 **⋯ → 设置** 可查看当前生效的配置（短命令阈值、自动关闭时间、历史条数等）并复制配置片段。
+9. 侧栏太窄、命令换行影响阅读时：点终端条右侧放大按钮（或 `⋯ → 展开`、`Ctrl+Alt+Enter`）进入**专注模式**；终端会放大到接近全屏，按 `Esc`（终端未聚焦时）或点背景退出。`⋯ → 字体放大/缩小` 可调字号。
+10. 面板 **⋯ → 设置** 可查看当前生效的配置（短命令阈值、自动关闭时间、历史条数等）并复制配置片段。
 
 ### Agent 工具
 
@@ -168,6 +177,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\switch-desktop-to-npm.
 | 打开/聚焦终端面板 | `Ctrl+Shift+\`` |
 | 新建终端 | `Ctrl+Alt+T` |
 | 关闭当前终端 | `Ctrl+Alt+Shift+W` |
+| 专注模式（放大/还原终端） | `Ctrl+Alt+Enter` |
+| 字体放大/缩小/恢复 | `Ctrl+Alt+=` / `Ctrl+Alt+-` / `Ctrl+Alt+0` |
 | 跟随最新命令 | `Ctrl+Alt+F` |
 | 搜索终端输出 | `Ctrl+F`（面板内） |
 | 复制选区 | `Ctrl+Shift+C` |

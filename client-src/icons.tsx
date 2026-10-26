@@ -310,6 +310,20 @@ export function IconMaximize(props: IconProps) {
   )
 }
 
+export function IconMinimize(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <path
+        d="M6 2.5v3.5H2.5M10 6V2.5h3.5M13.5 10H10v3.5M6 10H2.5V6.5"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Glyph>
+  )
+}
+
 export function IconKeyboard(props: IconProps) {
   return (
     <Glyph {...props}>

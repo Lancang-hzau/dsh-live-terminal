@@ -373,4 +373,21 @@ node tools/qa-e2e.mjs --slow --host-log=qa/artifacts/devhost-3105-final2.log "<t
 | 回归验证 | 点击已结束页签 → 指针移开 → 8s 内自动关闭；`accept-121.mjs` 增加该断言，agent 验收 **17/17 PASS** |
 | 测试/构建 | `npm test` **232/232**，typecheck 0 error，`lib/client.js` version 1.2.2；UI 冒烟 **16/16** |
 | 版本 | package/package-lock、host `/ping`、client bundle 统一 **1.2.2** |
+
+---
+
+## 16. v1.3.0 专注模式与字体可读性（2026-10-26）
+
+> 用户反馈：终端在右侧栏太窄，很多命令一行放不下、换行严重，影响阅读。v1.3.0 增加“专注模式”和字体大小控制，不改 Host 协议。
+
+| 项 | v1.3.0 结果 |
+|---|---|
+| 专注模式 | chrome 放大按钮 / `⋯ → 展开` / `Ctrl+Alt+Enter` 把面板以 fixed 浮层放大到 `inset: 3vh 3.5vw`（约 93% 视口），带半透明模糊背景与阴影；再点最小化、点背景或按 `Esc`（终端未聚焦时）退出 |
+| 宽度实测 | 1440×900 下根面板 **647px → 1339px**；PTY 网格 **88×46 → 185×44**，命令行不再被窄侧栏折断 |
+| 字体控制 | `⋯ → 字体放大/缩小` 或 `Ctrl+Alt+=`/`Ctrl+Alt+-`，10–20px；持久化到 `dsh-live-terminal.font-size`；`Ctrl+Alt+0` 恢复跟随 DSH 字体 |
+| 输入/兼容 | 放大后仍可输入、搜索、复制；`Esc` 在 xterm 聚焦时继续发给 TUI（vim 等），只点 chrome/背景后才用于退出专注模式 |
+| 样式 | 放大态圆角 14px、半透明 backdrop + blur、阴影；窄屏 (<=720px) 自动缩小边距；reduced-motion 关闭动画 |
+| 测试/构建 | `npm test` **232/232**，typecheck 0 error，`lib/client.js` version 1.3.0；UI 冒烟 **18/18**（新增放大/还原断言）；真实 agent 验收 **17/17** |
+| 版本 | package/package-lock、host `/ping`、client bundle 统一 **1.3.0** |
+| 发布状态 | 见下方发布记录 |
 | 发布状态 | commit `ed6817a`、tag `v1.2.2` 已 push；npm `1.2.2` 已发布；GitHub Release `v1.2.2` 已创建（tarball 231,650 B）；Desktop profile 已安装 1.2.2（client sha256 `B204082F…0052`），待用户重启生效 |

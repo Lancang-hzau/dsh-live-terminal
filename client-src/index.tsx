@@ -1,5 +1,5 @@
 /**
- * dsh-live-terminal — browser half (esbuild bundle entry) — 1.2.2.
+ * dsh-live-terminal — browser half (esbuild bundle entry) — 1.3.0.
  *
  * Registers:
  *  - the `zh`/`en` locale namespace,
@@ -560,6 +560,26 @@ export function apply(ctx: ClientContext): void {
       if (event.altKey && !event.shiftKey && key === 'f') {
         event.preventDefault()
         sendCommand('follow')
+        return
+      }
+      if (event.altKey && key === 'enter') {
+        event.preventDefault()
+        sendCommand('expand')
+        return
+      }
+      if (event.altKey && (key === '-' || key === '_')) {
+        event.preventDefault()
+        sendCommand('font-smaller')
+        return
+      }
+      if (event.altKey && (key === '=' || key === '+')) {
+        event.preventDefault()
+        sendCommand('font-larger')
+        return
+      }
+      if (event.altKey && key === '0') {
+        event.preventDefault()
+        sendCommand('font-reset')
       }
     }
     window.addEventListener('keydown', onKeyDown, true)
