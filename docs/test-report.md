@@ -373,4 +373,4 @@ node tools/qa-e2e.mjs --slow --host-log=qa/artifacts/devhost-3105-final2.log "<t
 | 回归验证 | 点击已结束页签 → 指针移开 → 8s 内自动关闭；`accept-121.mjs` 增加该断言，agent 验收 **17/17 PASS** |
 | 测试/构建 | `npm test` **232/232**，typecheck 0 error，`lib/client.js` version 1.2.2；UI 冒烟 **16/16** |
 | 版本 | package/package-lock、host `/ping`、client bundle 统一 **1.2.2** |
-| 发布状态 | 见下方发布记录（npm / GitHub / Desktop 安装） |
+| 发布状态 | commit `ed6817a`、tag `v1.2.2` 已 push；npm `1.2.2` 已发布；GitHub Release `v1.2.2` 已创建（tarball 231,650 B）；Desktop profile 已安装 1.2.2（client sha256 `B204082F…0052`），待用户重启生效 |

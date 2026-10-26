@@ -13,13 +13,13 @@
 
 ---
 
-## 0. 当前状态（2026-10-21 更新）
+## 0. 当前状态（2026-10-26 更新）
 
-- ✅ **`dsh-live-terminal@1.2.1` 已正式发布到 npmjs（latest）**：<https://www.npmjs.com/package/dsh-live-terminal>。发布 commit `41c703a`，annotated tag `v1.2.1`；npm tarball **22 files / 231.1 kB / shasum `5b5dfe78ddcfd6bc81c2604348bb6a7f50ab3a81`**，包内 `lib/client.js` sha256 **`289CC5B3…6724A`**（与本地构建一致，安装后的 Desktop 包已核对）。
-- ✅ v1.2.1 验证：host 单测 **232/232**、typecheck 0 error、真实 dev host UI 冒烟 **16/16**、真实 agent 本地验收 **16/16**（详见 `docs/test-report.md` §14）。
-- ✅ **Desktop profile 已切到 npm 1.2.1**：`package.json` 依赖 `dsh-live-terminal: 1.2.1`、`node_modules/dsh-live-terminal` 为真实 npm 目录（非 junction），bundle 列表保留 `dsh-live-terminal`；用户已完全重启 DeepSeek Harness 并确认更新正常。
-- ✅ **GitHub Release `v1.2.1` 已创建**，附 npm tarball 资产：<https://github.com/Lancang-hzau/dsh-live-terminal/releases/tag/v1.2.1>（资产 `dsh-live-terminal-1.2.1.tgz`，231,068 B）。
-- ✅ commit/tag 已 push 到 `origin/main`（`31097aa..117ce3a`，tag `v1.2.1`）。
+- ✅ **`dsh-live-terminal@1.2.2` 已发布到 npmjs（latest）**：发布 commit `ed6817a`、tag `v1.2.2`；tarball **22 files / 231,650 B / shasum `425a7f90e243405a544d86f78d8b92ca57341951`**；包内 `lib/client.js` sha256 **`B204082F…0052`**，与本地构建及 Desktop 安装一致。
+- ✅ v1.2.2 修复：自动关闭“假关闭”（悬停临时暂停/移开恢复，点击/选中页签不再永久暂停，暂停页签显示“已暂停”徽标）；关闭失败重新同步会话列表；Host terminate 失败不再 500。验证：host 单测 **232/232**、typecheck 0、UI 冒烟 **16/16**、真实 agent 验收 **17/17**、CI **success**（<https://github.com/Lancang-hzau/dsh-live-terminal/actions/runs/40315075294>）。
+- ✅ **GitHub Release `v1.2.2` 已创建**：<https://github.com/Lancang-hzau/dsh-live-terminal/releases/tag/v1.2.2>（资产 `dsh-live-terminal-1.2.2.tgz`，231,650 B）。
+- ✅ **Desktop profile 已切到 npm 1.2.2**：依赖/安装目录均为 1.2.2，client sha256 `B204082F…0052`；**需完全退出并重启 DeepSeek Harness 生效**。
+- ✅ **`dsh-live-terminal@1.2.1` 历史版本**：发布 commit `41c703a`、tag `v1.2.1`；tarball 231.1 kB / shasum `5b5dfe78…3a81`，client sha256 `289CC5B3…6724A`。
 - ✅ **`dsh-live-terminal@1.2.0` 已正式发布到 npmjs（历史 latest）**：<https://www.npmjs.com/package/dsh-live-terminal>（2026-10-20；1.1.0、1.0.0 为历史版本）
 - ✅ 发布产物已校验：npm tarball 18 files、shasum `393f2407ea7bd6b287163ada329d89be5fbe1d21`，包内 `lib/client.js` sha256 `71E945EF…C92E33` 与本地构建一致；发布使用 `npm publish --ignore-scripts` 直接取预构建产物（避免发布时重建）
 - ✅ 单测 182/182（v1.2 本地，Node 22/24 双版本验证）、独立 e2e 44 PASS（v1.0 验收）、Desktop 实机验证通过；v1.1/v1.2 验证见 `docs/test-report.md` §12/§13

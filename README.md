@@ -248,7 +248,7 @@ npm run typecheck
 
 # 本地验收（需要上面的 dev host 与带 token URL）
 node tools/smoke-ui-121.mjs "<url-with-token>"   # 面板/输入/搜索/菜单/配置 16 项
-node tools/accept-121.mjs "<url-with-token>"     # 真实 agent：拦截/自动打开/自动关闭/历史/tool 16 项
+node tools/accept-121.mjs "<url-with-token>"     # 真实 agent：拦截/自动打开/自动关闭/历史/tool 17 项
 ```
 
 CI（GitHub Actions）：`windows-latest` 用 Node 22/24 跑全量（`npm ci` → `npm run build` → bundle freshness（`git diff --exit-code -- lib/client.js`，产物未同步即失败）→ `npm test` → `npm run typecheck`）；`ubuntu-latest`（Node 24）跑平台无关测试子集（排除断言 Windows 路径语义的 `tests/registry.test.mjs`）。配置见 `.github/workflows/ci.yml`。
