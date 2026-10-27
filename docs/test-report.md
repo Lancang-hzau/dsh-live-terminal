@@ -391,3 +391,20 @@ node tools/qa-e2e.mjs --slow --host-log=qa/artifacts/devhost-3105-final2.log "<t
 | 版本 | package/package-lock、host `/ping`、client bundle 统一 **1.3.0** |
 | 发布状态 | commit `33e8a6d`、tag `v1.3.0` 已 push；npm `1.3.0` 已发布；GitHub Release `v1.3.0` 已创建（tarball 233,401 B）；Desktop profile 已安装 1.3.0（client sha256 `D7588269…65D5`），待用户重启生效 |
 | 发布状态 | commit `ed6817a`、tag `v1.2.2` 已 push；npm `1.2.2` 已发布；GitHub Release `v1.2.2` 已创建（tarball 231,650 B）；Desktop profile 已安装 1.2.2（client sha256 `B204082F…0052`），待用户重启生效 |
+
+---
+
+## 17. v1.3.1 倒计时横幅“悬停即消失”修复（2026-10-27）
+
+> 用户反馈：想手动点“立即关闭”，但鼠标移进终端面板触发悬停暂停后，“保留”和“立即关闭”按钮都消失了。根因：v1.3.0 的倒计时横幅只在 `countdownSession`（未暂停）时渲染，悬停暂停后 `autoClosePaused=true` 使横幅整段卸载，按钮自然消失。
+
+| 项 | v1.3.1 结果 |
+|---|---|
+| 横幅渲染条件 | 改为 `autoCloseAt !== null && !pinned`，不再依赖“是否暂停”；暂停时仍显示 |
+| 暂停态文案 | “自动关闭已暂停（移开鼠标恢复）”，避免用户以为按钮坏了 |
+| 按钮 | `保留` / `立即关闭` 在暂停态始终存在、可点击；“立即关闭”直接关闭会话 |
+| 状态栏/标签 | 暂停态标签继续显示“已暂停自动关闭”，状态栏可见 |
+| 回归脚本 | `tools/regress-banner-close.mjs`：命令退出 → 悬停暂停 → 横幅/按钮仍在 → 点“立即关闭” → 会话消失，**5/5 PASS** |
+| 测试/构建 | `npm test` **232/232**，typecheck 0 error，`lib/client.js` version 1.3.1；UI 冒烟 **18/18**；真实 agent 验收 **17/17** |
+| 版本 | package/package-lock、host `/ping`、client bundle 统一 **1.3.1** |
+| 发布状态 | 见下方发布记录 |

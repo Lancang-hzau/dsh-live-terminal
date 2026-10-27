@@ -73,7 +73,7 @@ try {
     }
     return { ping: await read('/ping'), config: await read('/config'), history: await read('/history?limit=5') }
   })
-  record('/ping reports 1.3.0', host.ping.status === 200 && host.ping.body?.version === '1.3.0', JSON.stringify(host.ping.body))
+  record('/ping reports 1.3.1', host.ping.status === 200 && host.ping.body?.version === '1.3.1', JSON.stringify(host.ping.body))
   record('/config returns effective values', host.config.status === 200 && host.config.body?.config?.interceptMinVisibleMs === 1500 && host.config.body?.config?.autoCloseCommandDelayMs === 8000, JSON.stringify(host.config.body?.config ?? null))
   record('/history returns entries array', host.history.status === 200 && Array.isArray(host.history.body?.entries), `entries=${host.history.body?.entries?.length}`)
 

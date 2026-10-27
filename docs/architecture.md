@@ -401,3 +401,11 @@ v1.2.1 的完整接口契约见 [`impl-1.2.1-contract.md`](./impl-1.2.1-contract
 | 字体 | `TerminalView` 新增 `fontSize` prop；Panel 维护 10–20px 覆盖值并持久化到 localStorage，0 = 跟随 DSH 主题；主题变化时仍尊重覆盖值 |
 | 快捷键 | 面板局部 keymap 增加 `Ctrl+Alt+Enter`（专注模式）、`Ctrl+Alt+±`（字号）、`Ctrl+Alt+0`（恢复 DSH 字号） |
 | 版本 | `1.3.0`。 |
+
+## 12. 修订记录（v1.3.1）
+
+| 领域 | v1.3.1 调整 |
+|---|---|
+| 自动关闭横幅 | 渲染条件从 `countdownSession`（未暂停）改为 `autoCloseAt !== null && !pinned`；悬停暂停不再卸载横幅，暂停态显示提示 + `保留`/`立即关闭` 按钮，按钮始终可点击。 |
+| 回归 | `tools/regress-banner-close.mjs` 覆盖“退出 → 悬停暂停 → 按钮仍在 → 立即关闭”。 |
+| 版本 | `1.3.1`。 |

@@ -409,11 +409,11 @@ test('GET /ping, / and unknown paths respond', async () => {
   const { handler } = setupRoutes()
   const ping = await dispatch(handler, { url: '/ping' })
   assert.equal(ping.res.statusCode, 200)
-  assert.deepEqual(jsonBody(ping.res), { ok: true, plugin: 'dsh-live-terminal', version: '1.3.0', sessions: 1 })
+  assert.deepEqual(jsonBody(ping.res), { ok: true, plugin: 'dsh-live-terminal', version: '1.3.1', sessions: 1 })
 
   const index = await dispatch(handler, { url: '/' })
   assert.equal(index.res.statusCode, 200)
-  assert.equal(jsonBody(index.res).version, '1.3.0')
+  assert.equal(jsonBody(index.res).version, '1.3.1')
   assert.deepEqual(jsonBody(index.res).routes, [
     'config',
     'sessions',
@@ -581,7 +581,7 @@ test('GET /config exposes the effective config, sandbox mode and shell', async (
   const { res } = await dispatch(handler, { url: '/config' })
   assert.equal(res.statusCode, 200)
   const body = jsonBody(res)
-  assert.equal(body.version, '1.3.0')
+  assert.equal(body.version, '1.3.1')
   assert.equal(body.config.historySize, 20)
   assert.equal(body.config.perSessionMaxSessions, 8)
   assert.equal(body.config.autoCloseNotice, 'all')

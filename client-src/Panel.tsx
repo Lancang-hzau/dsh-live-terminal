@@ -1,5 +1,5 @@
 /**
- * Full terminal panel body (1.3.0 compact chrome + focus mode).
+ * Full terminal panel body (1.3.1 compact chrome + focus mode).
  *
  * The panel is mounted once per right-sidebar tab occurrence. It owns:
  *  - the session list (REST seed + global SSE updates, polling fallback),
@@ -698,6 +698,14 @@ export function Panel(props: PanelProps) {
       ? selectedSession
       : null
   const countdownSeconds = countdownSession ? secondsFor(countdownSession) : 0
+  // The action banner must stay visible even after hover pauses the countdown;
+  // otherwise moving the pointer toward "立即关闭" makes the button disappear.
+  const autoCloseBannerSession =
+    selectedSession !== null && selectedSession.autoCloseAt !== null && !selectedSession.pinned
+      ? selectedSession
+      : null
+  const autoCloseBannerPaused = autoCloseBannerSession?.autoClosePaused === true
+  const autoCloseBannerSeconds = autoCloseBannerSession ? secondsFor(autoCloseBannerSession) : 0
 
   const pauseAutoClose = useCallback(
     (session: SessionInfo | null | undefined, reason: string): void => {
@@ -1261,7 +1269,8 @@ export function Panel(props: PanelProps) {
       connection === 'disconnected' ||
       termError !== null ||
       readOnly ||
-      countdownSession !== null)
+      countdownSession !== null ||
+      autoCloseBannerSession !== null)
   const statusVisible = hovered || abnormal
 
   const failure = listError
@@ -1447,31 +1456,34 @@ export function Panel(props: PanelProps) {
       </div>,
     )
   }
-  if (countdownSession !== null && countdownSeconds > 0) {
+  if (autoCloseBannerSession !== null) {
     bannerNodes.push(
       <div
         className="dshtp-banner"
-        data-kind="warn"
+        data-kind={autoCloseBannerPaused ? 'info' : 'warn'}
         role="status"
         key="countdown"
         data-dsh-tp-auto-close
+        data-paused={autoCloseBannerPaused ? 'true' : 'false'}
       >
         <span className="dshtp-banner-text">
-          {t('autoCloseIn', { seconds: String(countdownSeconds) })}
+          {autoCloseBannerPaused
+            ? t('autoClosePausedHint')
+            : t('autoCloseIn', { seconds: String(autoCloseBannerSeconds) })}
         </span>
         <span className="dshtp-banner-actions">
           <button
             type="button"
             className="dshtp-action"
             data-variant="primary"
-            onClick={() => keepTerminal(countdownSession)}
+            onClick={() => keepTerminal(autoCloseBannerSession)}
           >
             {t('keepOpen')}
           </button>
           <button
             type="button"
             className="dshtp-action"
-            onClick={() => void closeTerminal(countdownSession.id)}
+            onClick={() => void closeTerminal(autoCloseBannerSession.id)}
           >
             {t('autoCloseNow')}
           </button>

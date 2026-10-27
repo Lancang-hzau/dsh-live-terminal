@@ -16,6 +16,13 @@ Visible terminal panel for DeepSeek Harness: stream agent shell commands into an
 
 ![v1.3.0 focus mode: a wide terminal overlay with 185 columns](https://raw.githubusercontent.com/Lancang-hzau/dsh-live-terminal/HEAD/docs/screenshots/06-focus-mode.png)
 
+## v1.3.1 修复（2026-10-27）
+
+- **修复倒计时横幅被悬停“弄丢”**：v1.3.0 里鼠标移入终端会暂停自动关闭，而横幅只在“未暂停”时渲染，导致用户想点“立即关闭”时，鼠标一放上去横幅和两个按钮就消失。1.3.1 让横幅在暂停时**继续显示**，文案变为“自动关闭已暂停（移开鼠标恢复）”，`保留 / 立即关闭` 按钮始终可点；点击“立即关闭”会立刻关闭终端。
+- `tools/regress-banner-close.mjs` 增加回归：命令退出 → 悬停暂停 → 横幅/按钮仍在 → 点“立即关闭” → 会话消失。
+
+![v1.3.1: the countdown banner stays visible while paused, with 保留/立即关闭 still clickable](https://raw.githubusercontent.com/Lancang-hzau/dsh-live-terminal/HEAD/docs/screenshots/08-countdown-paused.png)
+
 ## v1.3.0 专注模式与窄栏可读性（2026-10-26）
 
 - **专注模式（放大终端）**：侧栏太窄导致命令换行时，点 chrome 上的放大按钮、菜单里的“展开”，或按 `Ctrl+Alt+Enter`，终端会覆盖到约 93% 视口宽（实测 PTY 从 88 列提升到 **185 列**），命令行不再被窄侧栏折断；按 `Esc`（终端未聚焦时）、点背景或再点最小化按钮退出。终端内运行 vim/TUI 时 `Esc` 仍发给程序，不会被抢走。
@@ -258,8 +265,9 @@ npm run typecheck
 # 用日志里的带 token URL 打开页面；右侧栏快捷键：Ctrl+Shift+B
 
 # 本地验收（需要上面的 dev host 与带 token URL）
-node tools/smoke-ui-121.mjs "<url-with-token>"   # 面板/输入/搜索/菜单/配置 16 项
+node tools/smoke-ui-121.mjs "<url-with-token>"   # 面板/输入/搜索/菜单/配置/专注模式 18 项
 node tools/accept-121.mjs "<url-with-token>"     # 真实 agent：拦截/自动打开/自动关闭/历史/tool 17 项
+node tools/regress-banner-close.mjs "<url-with-token>"  # 悬停暂停后 保留/立即关闭 仍可用
 ```
 
 CI（GitHub Actions）：`windows-latest` 用 Node 22/24 跑全量（`npm ci` → `npm run build` → bundle freshness（`git diff --exit-code -- lib/client.js`，产物未同步即失败）→ `npm test` → `npm run typecheck`）；`ubuntu-latest`（Node 24）跑平台无关测试子集（排除断言 Windows 路径语义的 `tests/registry.test.mjs`）。配置见 `.github/workflows/ci.yml`。
