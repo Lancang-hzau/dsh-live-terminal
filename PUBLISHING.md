@@ -13,12 +13,13 @@
 
 ---
 
-## 0. 当前状态（2026-10-26 更新）
+## 0. 当前状态（2026-10-27 更新）
 
-- ✅ **`dsh-live-terminal@1.3.0` 已发布到 npmjs（latest）**：发布 commit `33e8a6d`、tag `v1.3.0`；tarball **22 files / 233,401 B / shasum `5726352f6864b3fd48fa316cfaa7c9c2a1988d84`**；包内 `lib/client.js` sha256 **`D7588269…65D5`**，与本地构建及 Desktop 安装一致。
-- ✅ v1.3.0 新增**专注模式**（647px → 1339px，PTY 88 → 185 列；`Ctrl+Alt+Enter`/按钮/菜单；Esc 在 xterm 聚焦时留给 TUI）与**字体 10–20px 调节**（持久化、`Ctrl+Alt+±`、恢复 DSH 设置）；验证：host 单测 **232/232**、typecheck 0、UI 冒烟 **18/18**、真实 agent 验收 **17/17**、CI **success**（<https://github.com/Lancang-hzau/dsh-live-terminal/actions/runs/40320197499>）。
-- ✅ **GitHub Release `v1.3.0` 已创建**：<https://github.com/Lancang-hzau/dsh-live-terminal/releases/tag/v1.3.0>（资产 `dsh-live-terminal-1.3.0.tgz`，233,401 B）。
-- ✅ **Desktop profile 已切到 npm 1.3.0**：依赖/安装目录均为 1.3.0，client sha256 `D7588269…65D5`；**需完全退出并重启 DeepSeek Harness 生效**。
+- ✅ **`dsh-live-terminal@1.3.1` 已发布到 npmjs（latest）**：发布 commit `6a5aaf9`、tag `v1.3.1`；tarball **22 files / 233,838 B / shasum `098563e814aa2b7ac7b417e1a02167b74e373ad5`**；包内 `lib/client.js` sha256 **`E7C01FE3…B6BC`**，与本地构建及 Desktop 安装一致。
+- ✅ v1.3.1 修复：倒计时横幅在悬停暂停后不再消失，暂停态继续显示“自动关闭已暂停（移开鼠标恢复）”及可点击的 `保留 / 立即关闭`；新增 `tools/regress-banner-close.mjs` 回归（5/5）。验证：host 单测 **232/232**、typecheck 0、UI 冒烟 **18/18**、真实 agent 验收 **17/17**、CI **success**（<https://github.com/Lancang-hzau/dsh-live-terminal/actions/runs/40476162651>）。
+- ✅ **GitHub Release `v1.3.1` 已创建**：<https://github.com/Lancang-hzau/dsh-live-terminal/releases/tag/v1.3.1>（资产 `dsh-live-terminal-1.3.1.tgz`，233,838 B）。
+- ✅ **Desktop profile 已切到 npm 1.3.1**：依赖/安装目录均为 1.3.1，client sha256 `E7C01FE3…B6BC`；**需完全退出并重启 DeepSeek Harness 生效**。
+- ✅ **`dsh-live-terminal@1.3.0` 历史版本**：发布 commit `33e8a6d`、tag `v1.3.0`；tarball 233,401 B / shasum `5726352f…d84`，client sha256 `D7588269…65D5`。
 - ✅ **`dsh-live-terminal@1.2.2` 历史版本**：发布 commit `ed6817a`、tag `v1.2.2`；tarball 231,650 B / shasum `425a7f90…951`，client sha256 `B204082F…0052`。
 - ✅ **`dsh-live-terminal@1.2.1` 历史版本**：发布 commit `41c703a`、tag `v1.2.1`；tarball 231.1 kB / shasum `5b5dfe78…3a81`，client sha256 `289CC5B3…6724A`。
 - ✅ **`dsh-live-terminal@1.2.0` 已正式发布到 npmjs（历史 latest）**：<https://www.npmjs.com/package/dsh-live-terminal>（2026-10-20；1.1.0、1.0.0 为历史版本）

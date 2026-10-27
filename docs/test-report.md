@@ -407,4 +407,4 @@ node tools/qa-e2e.mjs --slow --host-log=qa/artifacts/devhost-3105-final2.log "<t
 | 回归脚本 | `tools/regress-banner-close.mjs`：命令退出 → 悬停暂停 → 横幅/按钮仍在 → 点“立即关闭” → 会话消失，**5/5 PASS** |
 | 测试/构建 | `npm test` **232/232**，typecheck 0 error，`lib/client.js` version 1.3.1；UI 冒烟 **18/18**；真实 agent 验收 **17/17** |
 | 版本 | package/package-lock、host `/ping`、client bundle 统一 **1.3.1** |
-| 发布状态 | 见下方发布记录 |
+| 发布状态 | commit `6a5aaf9`、tag `v1.3.1` 已 push；npm `1.3.1` 已发布；GitHub Release `v1.3.1` 已创建（tarball 233,838 B）；Desktop profile 已安装 1.3.1（client sha256 `E7C01FE3…B6BC`），待用户重启生效 |
